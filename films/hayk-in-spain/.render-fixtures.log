@@ -1,0 +1,19 @@
+render (fixtures): frames 0..191 (192 frames, 8.000s) scale 0.5, 1 worker(s)
+work folder /home/user/procedural-film/films/hayk-in-spain/.tmp/render-859-mugyswgo-w4o3h8
+canvas 540x960
+audio: 8.000s 48 kHz stereo, peak 0.829, 0.5s -> /home/user/procedural-film/films/hayk-in-spain/.tmp/render-859-mugyswgo-w4o3h8/audio.wav
+frames 1/192 (1%)  0.1 fps  eta 1867s
+frames 13/192 (7%)  1.1 fps  eta 163s
+frames 25/192 (13%)  1.8 fps  eta 93s
+frames 38/192 (20%)  2.4 fps  eta 64s
+frames 52/192 (27%)  2.9 fps  eta 48s
+frames 67/192 (35%)  3.3 fps  eta 37s
+frames 86/192 (45%)  3.9 fps  eta 27s
+frames 107/192 (56%)  4.4 fps  eta 19s
+frames 124/192 (65%)  4.7 fps  eta 14s
+frames 147/192 (77%)  5.2 fps  eta 9s
+frames 169/192 (88%)  5.6 fps  eta 4s
+frames 192/192 (100%)  5.9 fps  eta 0s
+frames 192/192 (100%)  5.9 fps  eta 0s
+frames rendered in 32.4s, encoding...
+wrote /home/user/procedural-film/films/hayk-in-spain/exports/fixtures.mp4 (7.95 MB, 192 frames, 8.000s) total 34.0s
