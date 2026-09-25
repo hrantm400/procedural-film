@@ -54,7 +54,7 @@
   function room(F) {
     return FILM.lib.cached(ID + '-room', () => {
       const c = FILM.makeCanvas(1080, 1920);
-      const g = c.getContext('2d');
+      const g = c.getContext('2d', { willReadFrequently: true });
       const P = F.pal;
       // wallpaper
       g.fillStyle = '#fbe5c4';
@@ -439,10 +439,10 @@
     if (t - FLIPS[k] > 0.45) {
       const c = FILM.lib.cached(ID + '-pile-' + k, () => {
         const cv = FILM.makeCanvas(1080, 1920);
-        drawPileLive(cv.getContext('2d'), F, FLIPS[k] + 1);
+        drawPileLive(cv.getContext('2d', { willReadFrequently: true }), F, FLIPS[k] + 1);
         return cv;
       });
-      ctx.drawImage(c, 0, 0);
+      ctx.save(); ctx.imageSmoothingQuality = 'low'; ctx.drawImage(c, 0, 0); ctx.restore();
       return;
     }
     drawPileLive(ctx, F, t);
@@ -512,7 +512,8 @@
       ctx.translate(-540, -960);
 
       // 1-2. room + window
-      ctx.drawImage(room(F), 0, 0);
+      // core sets imageSmoothingQuality 'high', which makes a scaled full-frame drawImage cost ~45 ms
+      ctx.save(); ctx.imageSmoothingQuality = 'low'; ctx.drawImage(room(F), 0, 0); ctx.restore();
       drawWindow(ctx, F, t);
       // warm lamp glow
       const lg = ctx.createRadialGradient(601, 540, 10, 601, 540, 220);

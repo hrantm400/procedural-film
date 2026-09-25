@@ -54,7 +54,7 @@
   function wall(F) {
     return FILM.lib.cached(ID + '-wall', () => {
       const c = FILM.makeCanvas(1080, 1920);
-      const g = c.getContext('2d');
+      const g = c.getContext('2d', { willReadFrequently: true });
       const P = F.pal;
       F.sky(g, '#ffd9b0', '#ffb98a');
       // tiled lower wall (azulejo pattern)
@@ -112,7 +112,7 @@
   function table(F) {
     return FILM.lib.cached(ID + '-table', () => {
       const c = FILM.makeCanvas(1080, 1920);
-      const g = c.getContext('2d');
+      const g = c.getContext('2d', { willReadFrequently: true });
       const P = F.pal;
       // table top (perspective)
       g.beginPath(); g.moveTo(-40, 1420); g.lineTo(1120, 1420); g.lineTo(1120, 1920); g.lineTo(-40, 1920); g.closePath();
@@ -304,7 +304,7 @@
       ctx.translate(-560, -1000);
 
       // 1. wall
-      ctx.drawImage(wall(F), 0, 0);
+      ctx.save(); ctx.imageSmoothingQuality = 'low'; ctx.drawImage(wall(F), 0, 0); ctx.restore(); // cheap resample under the camera push
       // 2. bokeh + buzz focus lines
       F.bokeh(ctx, { n: 16, seed: 1502, t, colors: ['#fff1b8', '#ffd1a8', '#ffffff'], alpha: 0.35, rMin: 20, rMax: 70, y: 0, h: 1000 });
       if (buzzing) {
@@ -346,7 +346,7 @@
       if (t > T_SWIPE + 0.3) F.sparkles(ctx, { x: 120, y: 280, w: 560, h: 500, n: 6, seed: 1505, t, size: 30 });
 
       // 4. table
-      ctx.drawImage(table(F), 0, 0);
+      ctx.save(); ctx.imageSmoothingQuality = 'low'; ctx.drawImage(table(F), 0, 0); ctx.restore(); // cheap resample under the camera push
 
       // 5a. burger hand (screen-left, from the bottom-left), bite at T_BITE
       const restB = [214, 1400];

@@ -595,6 +595,9 @@
     ctx.restore();
   }
 
+  // slow push-in on the park, with a punch on the shout; the pull-back starts from its end value
+  const pushAt = (t) => 1 + 0.04 * LIB.ease.outCubic(clamp((t - B_SHOUT) / 0.4)) + 0.02 * clamp(t / B_ZOOM);
+
   FILM.scene({
     id: ID,
     draw(ctx, tIn, info) {
@@ -604,7 +607,7 @@
         // ---- the park moment, with camera shake
         const sh = F.shakeMany(t, [[0, 0.3, 10], [B_SHOUT, 0.7, 42], [B_FALL + 0.12, 0.35, 22]], 2120);
         const trem = t > B_SHOUT + 0.7 ? [(h01('tr', LIB.boil(info.T)) - 0.5) * 8, (h01('tq', LIB.boil(info.T)) - 0.5) * 8] : [0, 0];
-        const push = 1 + 0.04 * LIB.ease.outCubic(clamp((t - B_SHOUT) / 0.4)) + 0.02 * (t / 4);
+        const push = pushAt(t);
         ctx.save();
         ctx.translate(sh[0] + trem[0], sh[1] + trem[1]);
         ctx.translate(A[0], A[1]);
@@ -645,7 +648,7 @@
       // L0 park, feathered, fading when small
       const s0Strength = clamp((1 - Z) / 0.25);
       const s0Alpha = clamp((Z - 0.2) / 0.3);
-      level(ctx, 'l0', A[0], A[1], Z, s0Strength, s0Alpha, (b) => drawL0(b, t, info));
+      level(ctx, 'l0', A[0], A[1], Z * pushAt(B_ZOOM), s0Strength, s0Alpha, (b) => drawL0(b, t, info));
       // zoom lines while pulling back
       const whoosh = Math.sin(clamp(u / 0.9) * Math.PI);
       if (whoosh > 0.02) F.focusLines(ctx, A[0], A[1], { inner: 380, count: 70, color: '#ffffff', alpha: 0.45 * whoosh, seed: 2131, width: 10 });
@@ -654,12 +657,13 @@
         if (t < t0 - 1e-6) return;
         const last = i === ECHOES.length - 1;
         const age = t - t0;
-        const a = last ? clamp(age / 0.15) : clamp(age / 0.12) * (1 - clamp((age - 0.3) / 0.22));
+        const a = last ? clamp(age / 0.15) : clamp(age / 0.12) * (1 - clamp((age - 0.22) / 0.18));
         if (a <= 0) return;
         F.text(ctx, 'I MISS HAAAAYK!!', 540 + (h01('ex', i, LIB.boil(info.T)) - 0.5) * 6, y - age * 30 * (last ? 0 : 1), {
           size, fill: '#ffe14a', stroke: P.line, lw: size * 0.18, alpha: a * (last ? 1 : 0.9), scale: F.popIn(t, t0), shadow: size * 0.07, shadowColor: '#b3122b',
         });
       });
+      F.vignette(ctx, 0.25, '20,30,80');
     },
   });
 })();

@@ -1309,7 +1309,7 @@
     ctx.restore();
   }
 
-  /** crown(ctx, x, y, s, o{ color, rot }): paper crown, bottom centre origin, 200 px wide at s=1. */
+  /** crown(ctx, x, y, s, o{ color, rot, flat }): paper crown, bottom centre origin, 200 px wide at s=1. */
   function crown(ctx, x, y, s = 1, o = {}) {
     ctx.save();
     ctx.translate(x, y);
@@ -1319,6 +1319,7 @@
     ctx.moveTo(-100, 0); ctx.lineTo(-100, -60); ctx.lineTo(-62, -95); ctx.lineTo(-36, -52); ctx.lineTo(0, -110);
     ctx.lineTo(36, -52); ctx.lineTo(62, -95); ctx.lineTo(100, -60); ctx.lineTo(100, 0); ctx.closePath();
     fo(ctx, o.color || pal.gold, 5);
+    if (o.flat) { ctx.restore(); return; }
     ctx.fillStyle = pal.goldShade;
     ctx.fillRect(-98, -24, 196, 20);
     ctx.fillStyle = '#e8413c'; ctx.beginPath(); ctx.arc(0, -60, 12, 0, TAU); ctx.fill();

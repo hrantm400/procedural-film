@@ -508,7 +508,7 @@
       if (t >= T_GULP && t < T_GULP + 0.5) {
         F.dust(ctx, bx, by - 160, t - T_GULP, { n: 7, size: 80, spread: 260, color: '#fff4e0', life: 0.5 });
       }
-      F.sfx(ctx, 'GULP!', 270, 1180, t, T_GULP, { size: 140, rot: -0.1, life: 1.0, fill: '#ffffff' });
+      F.sfx(ctx, 'GULP!', 270, 1180, t, T_GULP, { size: 140, rot: -0.1, life: 0.5, fill: '#ffffff' });
       if (second) {
         F.sparkles(ctx, { x: 560, y: 380, w: 420, h: 380, n: 9, seed: 71, t, size: 40, color: '#fff3a0' });
       }

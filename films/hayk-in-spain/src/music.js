@@ -27,7 +27,7 @@
 
   // Mix constants, tuned by measurement (tools/audio): loudness, peaks, per-bar profile.
   const MIX = {
-    trim: 1.05,
+    trim: 0.8,
     ceiling: 0.66, // soft limiter output ceiling (about -3.6 dBFS)
     knee: 0.5,
     bus: { drums: 0.6, perc: 0.8, bass: 0.3, pad: 0.26, keys: 0.6, bells: 0.45, lead: 0.5, sfx: 0.62, amb: 0.5 },
@@ -37,7 +37,13 @@
     // Section fader rides in dB at global times, pre-compressor: quiet egg, hushed pupa, full drop,
     // hushed winter, and an ending level that meets the opening level at the loop seam.
     // Per film: section fader rides in dB at global times, pre-compressor (see reference/music.md).
-    ride: [[0, 0]],
+    // Section rides: lift the light acts (comedy bounce, Spain, park, harp) toward the loud ones,
+    // and fade the last chord's tail out before the loop seam.
+    ride: [
+      [0, 0], [16.98, 0], [17, 4], [19.98, 4], [20, 0], [25.98, 0], [26, 2.5], [31.48, 2.5], [31.5, 0],
+      [53.98, 0], [54, 4], [58.48, 4], [58.5, 0], [70.98, 0], [71, 2.5], [74.98, 2.5], [75, 0],
+      [83.98, 0], [84, 2.5], [88.98, 2.5], [89, 0], [118.6, 0], [119.9, -12],
+    ],
   };
 
   // ---------------------------------------------------------------- pitch
@@ -1577,6 +1583,7 @@
     // growl chopper, a body low-pass and a breathy noise burst. big: lower, longer, with a chest thump.
     I.bark = (t, vel, o) => {
       o = o || {};
+      vel *= 2.6; // the formant filters eat most of the saw: this makes vel 1 a full-level bark
       const big = !!o.big;
       const len = big ? 0.26 : 0.14;
       const f0 = (o.f || 500) * (big ? 0.78 : 1);
@@ -1919,33 +1926,790 @@
   }
 
   // ---------------------------------------------------------------- the score
-  // DEMO SCORE — replace wholesale when composing the film. It gives the stub pass a pulse and
-  // shows the engine idiom: instruments take absolute global times, score() is re-invoked per bar
-  // and the engine windows each call, so scheduling the whole piece here is correct. Everything
-  // below derives from FILM.TIMELINE, so it runs at any bpm and duration.
+  // "Hayk: The Burger Quest". 120 bpm: a beat is 0.5 s, an 8th 0.25 s, a bar 2 s. Home key A minor.
+  // Hayk's theme (MOTIF, in scale degrees): A C E . D C D . E . . G A, a rising triad, a stepwise turn
+  // and the leap home. It slams the title, drives the big decision, goes flamenco (harmonic minor) in
+  // Spain, turns synth on the trading floor, sighs on strings for Goofy, flies home in C major and
+  // ends the film in D major. Every cue in FILM.TIMELINE.cues is implemented by hand at its time.
   const CH = {
-    home: ['D3', 'A3', 'D4', 'F#4'],
-    away: ['G3', 'B3', 'D4', 'G4'],
+    Am: ['A3', 'C4', 'E4'],
+    AmHi: ['A3', 'C4', 'E4', 'A4'],
+    Dm: ['D4', 'F4', 'A4'],
+    E: ['E3', 'G#3', 'B3', 'E4'],
+    Am9: ['G3', 'B3', 'C4', 'E4'],
+    Dm9: ['F3', 'A3', 'C4', 'E4'],
+    Fmaj9: ['E3', 'G3', 'A3', 'C4'],
+    // nylon-guitar voicings
+    gAm: ['A2', 'E3', 'A3', 'C4', 'E4'],
+    gG: ['G2', 'B2', 'D3', 'G3', 'B3', 'G4'],
+    gF: ['F2', 'C3', 'F3', 'A3', 'C4'],
+    gE: ['E2', 'B2', 'E3', 'G#3', 'B3', 'E4'],
+    gBb: ['Bb2', 'F3', 'Bb3', 'D4', 'F4'],
+    gD: ['D3', 'A3', 'D4', 'F#4'],
+    gGmaj: ['G2', 'B2', 'D3', 'G3', 'B3', 'G4'],
+    gA: ['A2', 'E3', 'A3', 'C#4', 'E4'],
   };
+  const MOTIF = [[0, 0, 1], [1, 2, 1], [2, 4, 2], [4, 3, 1], [5, 2, 1], [6, 3, 2], [8, 4, 3], [11, 6, 1], [12, 7, 4]];
+  const MODES = { min: [0, 2, 3, 5, 7, 8, 10], maj: [0, 2, 4, 5, 7, 9, 11], harm: [0, 2, 3, 5, 7, 8, 11] };
+  const deg = (root, mode, d) => {
+    const sc = MODES[mode];
+    const i = ((d % 7) + 7) % 7;
+    return hz(root) * Math.pow(2, (sc[i] + 12 * Math.floor(d / 7)) / 12);
+  };
+  // The theme from t0 in a key: [[t, hz, dur]], step = one 8th.
+  const motif = (t0, root, mode, step) => MOTIF.map(([o, d, l]) => [t0 + o * step, deg(root, mode, d), l * step]);
 
   function score(E, I) {
-    const { kick, hat, kalimba, pad, sub } = I;
-    const bpm = (FILM.TIMELINE && FILM.TIMELINE.bpm) || 120;
-    const DUR = (FILM.TIMELINE && FILM.TIMELINE.duration) || 32;
-    const BAR = 240 / bpm;
-    const BEAT = 60 / bpm;
-    const motif = ['D5', 'F#5', 'A5', 'E5'];
-    for (let beat = 0; beat * BEAT < DUR - 1e-9; beat++) {
-      const t = Math.round(beat * BEAT * 1000) / 1000;
-      const down = beat % 4 === 0;
-      kick(t, down ? 0.8 : 0.5, down ? 'full' : 'felt');
-      hat(t + BEAT / 2, 0.1);
-      kalimba(t + BEAT / 2, hz(motif[beat % 4]), 0.2, { hall: 0.15, delay: 0.1, pan: beat % 2 ? 0.15 : -0.15 });
-      if (down) {
-        const home = beat % 8 === 0;
-        pad(t, Math.min(t + BAR, DUR), home ? CH.home : CH.away, 0.28, { att: 0.05, rel: 0.1, cut0: 900, cut1: 1400, hall: 0.15 });
-        sub(t, Math.min(t + BAR, DUR), home ? 'D2' : 'G1', 0.4, { att: 0.02, rel: 0.08 });
+    const { kick, hat, crash, tock, marimba, glock, glass, fmBell, gong, ting, pad, sub, subDrop, pluck, boop, stab, lead, horn, nz, play, glide, whistle, revSwell, wind, flutter, shaker, plip } = I;
+    const { ks, piano, ep, taiko, snare, clap, cajon, brass, bass, bark, howl, whine, choir, bowed, whistleLine, scratch, skrrt, phoneBuzz, crunch } = I;
+    const on = (a, b) => E.w1 > a - 1.5 && E.w0 < b + 0.5;
+    const R = (...k) => E.rng(...k)();
+
+    // ---- shared gestures
+    const whoosh = (t, len, vel, o) => {
+      o = o || {};
+      nz(t, len, {
+        type: 'bandpass',
+        q: o.q || 1.1,
+        f: [[0, o.f0 || 700], [len * 0.35, o.fp || 3000, 'exp'], [len, o.f1 || 500, 'exp']],
+        amp: [[0, 0], [0.004, vel * 0.75], [len * 0.3, vel, 'lin'], [len, FLOOR, 'exp']],
+        panEnv: o.pan ? [[0, o.pan[0]], [len, o.pan[1], 'lin']] : null,
+        stereo: true,
+        room: 0.15,
+        hall: o.hall || 0.1,
+        key: 'wh',
+      });
+    };
+    const impact = (t, v, o) => {
+      o = o || {};
+      taiko(t, v, o.f || 50, { dec: 1.3, hall: 0.3 });
+      kick(t, v, 'full');
+      crash(t, 0.55 * v, { dec: o.dec || 1.8 });
+      subDrop(t, 110, 36, 1.0, 0.75 * v);
+      E.duck(t, 0.7);
+    };
+    const gtr = { bright: 0.42, t60: 1.5, len: 1.4, lp: 3600, room: 0.2, hall: 0.06 };
+    const strum = (t, notes, vel, o) => {
+      o = Object.assign({}, gtr, o || {});
+      const ns = o.up ? notes.slice().reverse() : notes;
+      ns.forEach((n, i) => ks(t + i * (o.spread || 0.012), n, vel * (1 - i * 0.04), o));
+    };
+    const golpe = (t, v) => {
+      tock(t, 0.25 * v, 260);
+      nz(t, 0.05, { type: 'bandpass', q: 1, f: [[0, 2400]], amp: perc(0.2 * v, 0.001, 0.03), key: 'golpe' });
+    };
+    const harp = { bright: 0.75, t60: 2.8, len: 2.2, lp: 6500, room: 0.2, hall: 0.35 };
+    const gliss = (t, notes, step, vel) => notes.forEach((n, i) => ks(t + i * step, n, vel, harp));
+    const sparkle = (t, v) => {
+      ting(t, hz('E7'), 0.5 * v, { dec: 0.8 });
+      glock(t, hz('B6'), 0.25 * v);
+      glock(t + 0.06, hz('E7'), 0.2 * v);
+      glass(t + 0.12, hz('B7'), 0.08 * v);
+    };
+    const roll = (a, b, v0, v1, f) => {
+      const n = Math.round((b - a) / 0.125);
+      for (let k = 0; k < n; k++) (f || snare)(a + k * 0.125, v0 + ((v1 - v0) * k) / Math.max(1, n - 1));
+    };
+    // Epic battle kit on 16ths from a to b.
+    const battleDrums = (a, b, v, o) => {
+      o = o || {};
+      const pat = [1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1];
+      const sn = o.snare || [4, 12];
+      for (let k = 0; a + k * 0.125 < b - 1e-6; k++) {
+        const t = a + k * 0.125;
+        const s = k % 16;
+        if (s % 4 === 0) {
+          kick(t, 0.8 * v, 'full');
+          E.duck(t, 0.45);
+        }
+        if (sn.includes(s)) snare(t, 0.5 * v);
+        if (pat[s]) taiko(t, (0.2 + (s % 4 === 0 ? 0.12 : 0)) * v, s % 2 ? 105 : 82, { dec: 0.35 });
+        if (s % 2 === 0) hat(t, 0.06 * v);
       }
+    };
+    // Comedy theme: C major oom-pah, pizzicato bass and tune, marimba chords and a woodblock.
+    const comedy = (t0, t1, o) => {
+      o = o || {};
+      const bars = [['C3', 'G2', ['E4', 'G4', 'C5']], ['G2', 'D3', ['F4', 'G4', 'B4']]];
+      const tune = [
+        [[0, 'E5'], [0.25, 'G5'], [0.5, 'E5'], [0.75, 'C5'], [1, 'D5'], [1.25, 'E5'], [1.5, 'G4']],
+        [[0, 'F5'], [0.25, 'D5'], [0.5, 'B4'], [0.75, 'G4'], [1, 'A4'], [1.25, 'B4'], [1.5, 'D5'], [1.75, 'F5']],
+      ];
+      const pz = { bright: 0.55, t60: 0.4, len: 0.45, lp: 4500, room: 0.2 };
+      for (let bi = 0; t0 + bi * 2 < t1 - 1e-6; bi++) {
+        const b = t0 + bi * 2;
+        const [r1, r2, chord] = bars[bi % 2];
+        for (const [dt, r] of [[0, r1], [1, r2]]) if (b + dt < t1 - 1e-6) ks(b + dt, r, 0.9, { bright: 0.3, t60: 0.5, len: 0.5, lp: 1800 });
+        for (const dt of [0.5, 1.5])
+          if (b + dt < t1 - 1e-6) {
+            chord.forEach((n) => marimba(b + dt, hz(n), 0.17, { dec: 0.35 }));
+            tock(b + dt, 0.25, 950);
+          }
+        for (const [dt, n] of tune[bi % 2])
+          if (b + dt < t1 - 1e-6) {
+            ks(b + dt, n, 0.6, pz);
+            marimba(b + dt, hz(n), 0.18, { pan: 0.2 });
+          }
+        if (o.kick) {
+          kick(b, 0.7, 'felt');
+          if (b + 1 < t1) kick(b + 1, 0.6, 'felt');
+          for (const dt of [0.5, 1.5]) if (b + dt < t1) snare(b + dt, 0.18, { dec: 0.1 });
+        }
+      }
+    };
+
+    // ============================================================ 0-4 COLD OPEN (A minor)
+    if (on(0, 4)) {
+      taiko(0, 1.0, 52, { dec: 1.6, hall: 0.35 });
+      kick(0, 0.9, 'full');
+      subDrop(0, 95, 36, 1.3, 0.8);
+      pad(0, 3.6, ['A1', 'E2', 'A2', 'E3'], 0.3, { att: 0.3, rel: 0.3, cut0: 500, cut1: 1400 });
+      revSwell(0.03, 0.935, 0.55, { hi: true }); // reverse cymbal into the slam
+      // 0.5 focus lines
+      whoosh(0.5, 0.45, 0.55, { f0: 900, fp: 3600, f1: 500, pan: [-0.6, 0.6] });
+      taiko(0.5, 0.8, 78);
+      snare(0.5, 0.45);
+      taiko(0.75, 0.45, 95);
+      // 1.0 title slam, and the theme on horns
+      impact(1, 1.05, { dec: 2.2 });
+      brass(1, CH.AmHi, 0.4, 0.55);
+      const ph = [[1, 'A4'], [1.25, 'C5'], [1.5, 'E5'], [2, 'D5'], [2.25, 'C5'], [2.5, 'D5'], [3, 'E5'], [3.25, 'G5'], [3.5, 'A5']];
+      horn(ph, 3.7, 0.34, { hall: 0.25 });
+      horn(ph.map(([t, n]) => [t, hz(n) / 2]), 3.7, 0.26, { hall: 0.2, pan: -0.2 });
+      brass(2, ['F3', 'A3', 'D4'], 0.3, 0.38);
+      brass(3, ['C4', 'E4', 'G4'], 0.3, 0.38);
+      brass(3.5, CH.AmHi, 0.22, 0.5);
+      for (const [t, v, f] of [[1.5, 0.6, 70], [1.75, 0.4, 90], [2, 0.75, 60], [2.5, 0.6, 70], [2.75, 0.45, 90], [3, 0.75, 60], [3.25, 0.5, 80]]) taiko(t, v, f);
+      taiko(3.5, 0.95, 50, { dec: 0.45, hall: 0.05 });
+      kick(2, 0.7, 'full');
+      kick(3, 0.7, 'full');
+      kick(3.5, 0.9, 'full');
+      crash(3.5, 0.4, { dec: 0.45 });
+      roll(3, 3.5, 0.15, 0.45);
+      sub(1, 2, 'A1', 0.45);
+      sub(2, 3, 'D2', 0.45);
+      sub(3, 3.5, 'C2', 0.45);
+      sub(3.5, 3.8, 'A1', 0.5);
+      for (let k = 0; k < 10; k++) {
+        const t = 1 + k * 0.25;
+        const root = t < 2 ? 'A2' : t < 3 ? 'D2' : 'C3';
+        pluck(t, root, 0.26, { dec: 0.2, bright: 6 });
+        pluck(t + 0.125, hz(root) * 2, 0.12, { dec: 0.12, bright: 6 });
+      }
+      // 2.0 burger sparkle chime
+      ting(2, hz('A6'), 0.5);
+      [['E6', 0], ['A6', 0.06], ['C7', 0.12], ['E7', 0.18]].forEach(([n, d]) => glock(2 + d, hz(n), 0.3));
+      glass(2.02, hz('E7'), 0.12);
+      // 3.0 EPISODE 1 tag
+      tock(3, 0.2, 1400);
+    }
+
+    // ============================================================ 4-9 TRADER DEN: lo-fi beat
+    if (on(4, 9)) {
+      play(4, 4.6, () => grainBuffer(E.ctx, 'vinyl', 4.6, clickGrains(E.rng('vinyl'), 0, 4.6, 150, { amp: 0.22, f0: 1800, f1: 5000, dec: 0.001 })), 0.3, { bus: 'amb' });
+      nz(4, 4.6, { type: 'bandpass', q: 0.5, f: [[0, 2500]], amp: [[0, 0], [0.3, 0.012], [4.4, 0.012], [4.6, 0]], stereo: true, sustain: true, bus: 'amb', key: 'hiss' });
+      for (const [t, root, notes] of [[4, 'A1', CH.Am9], [6, 'D2', CH.Dm9], [8, 'F1', CH.Fmaj9]]) {
+        const end = Math.min(t + 2, 8.5);
+        sub(t, end - 0.1, root, 0.42, { att: 0.02, rel: 0.2 });
+        notes.forEach((n, i) => ep(t + i * 0.014, n, 0.2, { dec: 1.6 }));
+        if (t < 8) {
+          notes.forEach((n, i) => ep(t + 0.75 + i * 0.012, n, 0.12, { dec: 1.0 }));
+          notes.slice(1).forEach((n, i) => ep(t + 1.56 + i * 0.012, n, 0.09, { dec: 0.7 }));
+        }
+      }
+      tock(4, 0.3, 2400);
+      hat(4, 0.12);
+      for (const b of [4, 6, 8]) {
+        kick(b, 0.75, 'felt');
+        E.duck(b, 0.3);
+        if (b < 8) {
+          kick(b + 0.75, 0.5, 'felt');
+          kick(b + 1.31, 0.4, 'felt');
+          snare(b + 1, 0.4, { dec: 0.14 }); // the rim lands on 5 and 7
+        }
+      }
+      for (let t = 4; t < 8.5; t += 0.5) {
+        hat(t, 0.07 + 0.03 * R('lh', t));
+        hat(t + 0.31, 0.045);
+      }
+      // the EP quotes the theme head, swung and lazy
+      [[6, 'A4'], [6.31, 'C5'], [6.5, 'E5'], [7, 'D5'], [7.31, 'C5'], [7.5, 'D5']].forEach(([t, n]) => ep(t, n, 0.16, { dec: 0.9, delay: 0.12 }));
+      whoosh(5, 0.5, 0.55, { f0: 500, fp: 3200, f1: 700, pan: [-0.9, 0.4] });
+      // 7.0 PING
+      ting(7, hz('B6'), 0.6, { dec: 0.9 });
+      glass(7, hz('E7'), 0.25);
+      glock(7.06, hz('B6'), 0.2);
+      revSwell(8, 0.965, 0.5);
+      roll(8.5, 9, 0.18, 0.45);
+    }
+
+    // ============================================================ 9-13 BIG DECISION: battle drums
+    if (on(9, 13)) {
+      whoosh(9, 0.55, 0.6, { f0: 400, fp: 2600, f1: 300, pan: [0.8, -0.8] });
+      impact(9, 1.0);
+      impact(9.5, 0.9);
+      impact(11, 1.0);
+      // the theme in harmonic minor: its accents land on the 9, 9.5 and 11 impacts
+      const ph = motif(9, 'A4', 'harm', 0.25).map(([t, f]) => [t, f]);
+      horn(ph, 12.7, 0.36, { hall: 0.25 });
+      horn(ph.map(([t, f]) => [t, f / 2]), 12.7, 0.28, { hall: 0.2 });
+      for (const [t, root, notes] of [[9, 'A2', CH.Am], [10, 'D2', CH.Dm], [11, 'E2', CH.E], [12, 'A2', CH.AmHi]]) {
+        pad(t, t + (t === 12 ? 0.7 : 1), notes, 0.2, { att: 0.05, rel: 0.2, cut0: 1500, cut1: 2500 });
+        sub(t, t + (t === 12 ? 0.7 : 1), root, 0.5);
+        for (let k = 0; k < (t === 12 ? 5 : 8); k++) pluck(t + k * 0.125, k % 4 === 2 ? hz(root) * 2 : root, 0.28, { dec: 0.13, bright: 7 });
+      }
+      for (const [t, notes, v] of [[9, CH.Am, 0.5], [9.5, CH.AmHi, 0.6], [10.25, CH.Dm, 0.35], [10.75, CH.Dm, 0.4], [11, CH.E, 0.6], [11.5, ['E4', 'G#4', 'B4'], 0.4], [12, CH.AmHi, 0.55], [12.5, CH.AmHi, 0.6]]) brass(t, notes, t === 12.5 ? 0.2 : 0.18, v);
+      battleDrums(9, 12.5, 1);
+      kick(12.5, 0.9, 'full');
+      taiko(12.5, 0.9, 55);
+      crash(12.5, 0.4, { dec: 1.0 });
+    }
+
+    // ============================================================ 13-17 GOOFY KNOWS: sad piano
+    if (on(13, 17)) {
+      [[13, 'A2'], [13.5, 'E3'], [14, 'F2'], [14.5, 'C3'], [15, 'D2'], [15.5, 'A2'], [16, 'E2'], [16.5, 'B2']].forEach(([t, n]) => piano(t, n, 0.26));
+      [[13, ['C4', 'E4']], [14, ['A3', 'C4']], [15, ['F3', 'A3']], [16, ['G#3', 'D4']]].forEach(([t, ns]) => ns.forEach((n) => piano(t + 0.02, n, 0.12)));
+      // the theme, slowed to quarters and bent sad at the end
+      [[13, 'A4'], [13.5, 'C5'], [14, 'E5'], [15, 'D5'], [15.5, 'C5'], [16, 'B4']].forEach(([t, n]) => {
+        piano(t, n, 0.36);
+        glock(t, hz(n) * 2, 0.06, { dec: 1.2 });
+      });
+      pad(13, 16.9, ['A2', 'E3', 'C4'], 0.1, { sine: true, att: 0.8, rel: 0.5 });
+      whine(14.05, 0.75, 700, 1150, 850, 0.14);
+      whine(14.95, 0.6, 800, 1050, 650, 0.1);
+      [16, 16.5].forEach((t, i) => {
+        tock(t, 0.25, 130, { bus: 'sfx', dec: 0.08 });
+        nz(t, 0.08, { type: 'lowpass', f: [[0, 1800]], amp: perc(0.22, 0.001, 0.04), key: 'step' + i });
+      });
+    }
+
+    // ============================================================ 17-21 LEASH HANDOFF: comedy bounce
+    if (on(17, 21)) {
+      comedy(17, 20);
+      hat(17, 0.05);
+      // 19.5 teeth sparkle
+      sparkle(19.5, 1);
+      // 20 ominous low note: a tritone in the low piano, taiko and low brass
+      piano(20, 'A1', 0.45, { dec: 2.5 });
+      piano(20, 'Eb2', 0.35, { dec: 2.5 });
+      piano(20, 'A2', 0.2, { dec: 2 });
+      taiko(20, 0.7, 45, { dec: 1.5, hall: 0.3 });
+      horn([[20, 'A2']], 20.85, 0.3);
+      horn([[20, 'Eb3']], 20.85, 0.22);
+      sub(20, 20.85, 'A1', 0.5, { att: 0.01, rel: 0.3 });
+    }
+
+    // ============================================================ 21-26 TAKEOFF
+    if (on(21, 26)) {
+      // jet engine: rising roar, turbine whine
+      nz(21, 2.6, {
+        type: 'lowpass',
+        q: 0.9,
+        f: [[0, 250], [1.0, 2600, 'exp'], [1.2, 3500, 'exp'], [2.6, 700, 'exp']],
+        amp: [[0, 0], [0.03, 0.12], [1.0, 0.45, 'exp'], [1.3, 0.5, 'lin'], [2.6, FLOOR, 'exp']],
+        stereo: true,
+        sustain: true,
+        panEnv: [[0, -0.5], [1.2, 0], [2.6, 0.7, 'lin']],
+        key: 'jet',
+        room: 0.1,
+      });
+      glide(21, 600, 2600, 1.1, 0.06, { hall: 0.1 });
+      taiko(21, 0.6, 60);
+      kick(21, 0.6, 'full');
+      tock(21, 0.3, 700, { bus: 'sfx' });
+      pad(21, 22, ['C3', 'G3', 'C4', 'E4'], 0.22, { att: 0.9, rel: 0.05, cut0: 600, cut1: 3000 });
+      roll(21.5, 22, 0.12, 0.4);
+      // 22 takeoff
+      whoosh(22, 0.9, 0.7, { f0: 300, fp: 2800, f1: 400, pan: [-0.7, 0.8], hall: 0.2 });
+      impact(22, 0.9);
+      brass(22, ['C4', 'E4', 'G4', 'C5'], 0.35, 0.45);
+      // adventure groove C | G/B | F | E7 into Spain
+      for (const [t, root, notes] of [[22, 'C2', ['C4', 'E4', 'G4']], [23, 'B1', ['B3', 'D4', 'G4']], [24, 'F2', ['A3', 'C4', 'F4']], [25, 'E2', ['G#3', 'B3', 'D4', 'E4']]]) {
+        pad(t, t + 1, notes, 0.16, { att: 0.08, rel: 0.1, cut0: 1600, cut1: 2400 });
+        for (let k = 0; k < 4; k++) bass(t + k * 0.25, k % 2 ? hz(root) * 2 : root, 0.2, 0.4);
+        for (let k = 0; k < 8; k++) pluck(t + k * 0.125, notes[k % notes.length], 0.13, { dec: 0.16, bright: 9, delay: 0.08, pan: k % 2 ? 0.3 : -0.3 });
+      }
+      for (let t = 22.5; t < 25; t += 0.5) {
+        kick(t, 0.65, 'full');
+        E.duck(t, 0.4);
+      }
+      for (const t of [22.5, 23.5, 24.5]) clap(t, 0.35);
+      for (let t = 23.5; t < 26; t += 0.125) shaker(t, 0.05 + (Math.round(t * 8) % 2 ? 0 : 0.03));
+      // 23.5 whip-pan swish
+      nz(23.5, 0.28, { type: 'bandpass', q: 0.9, f: [[0, 1500], [0.2, 7000, 'exp'], [0.28, 3000, 'exp']], amp: [[0, 0], [0.003, 0.6], [0.08, 0.5, 'lin'], [0.28, FLOOR, 'exp']], panEnv: [[0, 0.9], [0.25, -0.9, 'lin']], stereo: true, key: 'swish' });
+      crash(23.5, 0.3, { dec: 1 });
+      // map flight: a glockenspiel travel figure
+      [[24, 'C6'], [24.25, 'G5'], [24.5, 'A5'], [24.75, 'C6'], [25, 'B5'], [25.25, 'G#5'], [25.5, 'E5']].forEach(([t, n]) => glock(t, hz(n), 0.14, { dec: 1 }));
+      // a first flamenco flourish on E
+      strum(25, CH.gE, 0.3);
+      strum(25.5, CH.gE, 0.25, { spread: 0.008 });
+      strum(25.625, CH.gE, 0.25, { spread: 0.008 });
+      strum(25.75, CH.gE, 0.3, { spread: 0.008 });
+      revSwell(25, 0.965, 0.45);
+      roll(25, 26, 0.1, 0.4);
+    }
+
+    // ============================================================ 26-34 SPAIN: flamenco groove
+    if (on(26, 34)) {
+      const segs = [[26, 27, 'A2', CH.gAm], [27, 28, 'G2', CH.gG], [28, 29, 'E2', CH.gE], [29, 30, 'A2', CH.gAm], [30, 30.5, 'A2', CH.gAm], [30.5, 31, 'G2', CH.gG], [31, 31.5, 'F2', CH.gF]];
+      for (const [a, b, root, notes] of segs) {
+        ks(a, root, 0.5, { bright: 0.3, t60: 0.9, len: 0.9, lp: 1200 });
+        sub(a, b - 0.05, root, 0.3);
+        for (let t = a; t < b - 1e-6; t += 0.25) {
+          const k = Math.round((t - 26) / 0.25) % 4;
+          if (k === 0) strum(t, notes, 0.34);
+          else if (k === 2) {
+            golpe(t, 1);
+            strum(t, notes.slice(-3), 0.12, { stop: 0.07, lp: 2200 });
+          } else strum(t, notes.slice(-3), 0.16, { up: true, len: 0.5 });
+          // cajon: bass on 1, slap on the backbeat; palmas on the backbeat and the last 8th
+          if (k === 0) cajon(t, 0.55, false);
+          if (k === 2) {
+            cajon(t, 0.45, true);
+            clap(t, 0.32, { pan: -0.3 });
+          }
+          if (k === 3) clap(t, 0.2, { pan: 0.35 });
+          if (k === 1 && Math.round(t * 4) % 8 === 5) cajon(t, 0.3, false);
+        }
+      }
+      // the theme on nylon guitar, harmonic minor, doubled softly by the FM lead
+      const m = motif(26, 'A4', 'harm', 0.25);
+      m.forEach(([t, f]) => ks(t, f, 0.55, { bright: 0.62, t60: 1.2, len: 1.2, lp: 5000, pan: 0.1, room: 0.2, delay: 0.08 }));
+      lead(m.map(([t, f]) => [t, f, 0.03]), 29.9, 0.08, { delay: 0.1 });
+      // the answer: a descending flamenco run into the E sting
+      [[30, 'A5'], [30.25, 'G5'], [30.5, 'F5'], [30.75, 'E5'], [31, 'D5'], [31.25, 'C5']].forEach(([t, n]) => ks(t, n, 0.5, { bright: 0.62, t60: 1, len: 0.9, lp: 5000, pan: 0.1, delay: 0.08 }));
+      // 27.5 pose sparkle; 30.5 the aroma ribbon
+      sparkle(27.5, 0.9);
+      ['A5', 'C6', 'E6', 'A6'].forEach((n, i) => glass(30.5 + i * 0.09, hz(n), 0.06, { dec: 1.2 }));
+      // 31.5 impact frame: E sting with the flamenco b9
+      impact(31.5, 0.95);
+      brass(31.5, ['E3', 'B3', 'F4', 'G#4'], 0.4, 0.55);
+      strum(31.5, CH.gE, 0.6, { spread: 0.008 });
+      sub(31.5, 32.9, 'E1', 0.4, { att: 0.2 });
+      // tremolo on E, growing to the shout
+      for (let t = 31.875; t < 33 - 1e-6; t += 0.125) strum(t, CH.gE.slice(-4), 0.06 + ((t - 31.875) / 1.125) * 0.14, { spread: 0.006, len: 0.4, up: Math.round(t * 8) % 2 === 1 });
+      roll(32.25, 33, 0.08, 0.35, (t, v) => taiko(t, v, 90, { dec: 0.3 }));
+      pad(31.8, 33, ['E2', 'B2', 'E3'], 0.14, { att: 1.0, rel: 0.05, cut0: 400, cut1: 1600 });
+      // 33 shout sting on Bb, the Phrygian flat two
+      impact(33, 1.05);
+      brass(33, ['Bb3', 'D4', 'F4', 'Bb4'], 0.35, 0.6);
+      strum(33, CH.gBb, 0.6, { spread: 0.008 });
+      glass(33, hz('F7'), 0.1);
+      // fill into the montage
+      for (const [t, s] of [[33.5, false], [33.625, true], [33.75, false], [33.875, true]]) cajon(t, 0.5, s);
+      clap(33.75, 0.35);
+      clap(33.875, 0.4);
+    }
+
+    // ============================================================ 34-49 EATING MONTAGE: heavy funk
+    if (on(34, 49)) {
+      const bassA = [[0, 'A1', 2], [3, 'A2', 1], [4, 'A1', 1], [6, 'G2', 1], [7, 'A2', 1], [10, 'E2', 1], [11, 'G2', 1], [12, 'A2', 2], [14, 'C3', 1], [15, 'C#3', 1]];
+      const bassD = [[0, 'D2', 2], [3, 'D3', 1], [4, 'D2', 1], [6, 'C3', 1], [7, 'D3', 1], [10, 'A2', 1], [11, 'C3', 1], [12, 'D3', 2], [14, 'F#2', 1], [15, 'G#2', 1]];
+      for (let bar = 34; bar < 48.5; bar += 2) {
+        const isA = ((bar - 34) / 2) % 2 === 0;
+        const stop = bar === 48 ? 4 : 16;
+        for (const [s, n, l] of isA ? bassA : bassD) if (s < stop) bass(bar + s * 0.125, n, l * 0.11, 0.55);
+        const chop = isA ? ['G3', 'C4', 'E4'] : ['F#3', 'C4', 'E4'];
+        for (let s = 0; s < stop; s++) {
+          const t = bar + s * 0.125;
+          if ([0, 3, 7, 10].includes(s)) {
+            kick(t, s ? 0.72 : 0.92, 'full');
+            E.duck(t, 0.35);
+          }
+          if (s === 4 || s === 12) snare(t, 0.6);
+          else if ([6, 9, 14].includes(s)) snare(t, 0.09, { dec: 0.07 });
+          hat(t, (s % 2 ? 0.035 : 0.075) + (s % 4 === 2 ? 0.03 : 0), s === 14 && !isA);
+          if ([2, 5, 10, 13].includes(s)) stab(t, chop, 0.22, { len: 0.07, f: 1900, pan: 0.2 });
+        }
+        // Burger Kong and McDonut's: the horn section joins
+        if (bar >= 40 && bar < 48) for (const s of [6, 14]) brass(bar + s * 0.125, isA ? ['C4', 'E4', 'G4'] : ['C4', 'D4', 'F#4'], 0.1, 0.3, { hall: 0.1 });
+        if (bar >= 44 && bar < 48) pad(bar, bar + 2, isA ? ['E4', 'G4', 'C5'] : ['F#4', 'A4', 'C5'], 0.12, { att: 0.3, rel: 0.2, cut0: 2500, cut1: 3500, hall: 0.2 });
+      }
+      // 34 cut
+      crash(34, 0.5);
+      taiko(34, 0.7, 60);
+      // CRUNCH x3
+      crunch(35, 0.95, 'k1');
+      crunch(36, 0.95, 'k2');
+      crunch(37, 1.0, 'k3');
+      // 39 Burger Kong: gorilla toms
+      crash(39, 0.35);
+      for (const [t, f] of [[39, 70], [39.25, 60], [39.5, 50]]) taiko(t, 0.6, f);
+      // 40 CHOMP
+      impact(40, 1.05);
+      crunch(40, 1.0, 'chomp');
+      nz(40, 0.18, { type: 'lowpass', q: 1.2, f: [[0, 1800], [0.18, 300, 'exp']], amp: perc(0.7, 0.002, 0.1), key: 'chomp' });
+      glide(40.12, 380, 90, 0.2, 0.3, { bus: 'sfx' });
+      // 44 McDonut's
+      crash(44, 0.45);
+      taiko(44, 0.6, 60);
+      for (let k = 0; k < 20; k++) {
+        const t = 44.125 + k * 0.125;
+        const ns = ['E7', 'C7', 'A6', 'G6', 'E6', 'D6', 'C6'];
+        glock(t, hz(ns[(k * 3) % ns.length]), 0.05 + 0.03 * R('fries', k), { dec: 0.6, pan: (R('fp', k) - 0.5) * 1.2 });
+      }
+      // 47 "BA DA BA BA BAAA": the theme head, sung by the horns
+      [[47, 'A4', 0.2], [47.25, 'C5', 0.2], [47.5, 'E5', 0.2], [47.75, 'D5', 0.2], [48, 'C5', 0.45]].forEach(([t, n, l]) => {
+        brass(t, [n, hz(n) / 2], l, 0.42, { hall: 0.2 });
+        glock(t, hz(n) * 2, 0.12);
+      });
+      lead([[47, 'A4'], [47.25, 'C5'], [47.5, 'E5'], [47.75, 'D5'], [48, 'C5']], 48.45, 0.12, { delay: 0.12 });
+      revSwell(48, 0.965, 0.45, { hi: true });
+      roll(48.5, 49, 0.2, 0.5);
+      ['C5', 'E5', 'G5', 'C6', 'E6', 'G6'].forEach((n, i) => glass(48.5 + i * 0.07, hz(n), 0.05, { dec: 0.8 }));
+    }
+
+    // ============================================================ 49-54 FOOD NIRVANA: choir and bells
+    if (on(49, 54)) {
+      const chs = [[49, 51, 'F2', ['F3', 'A3', 'C4', 'E4', 'G4']], [51, 52, 'E2', ['E3', 'G3', 'C4', 'E4', 'G4']], [52, 53, 'D2', ['D3', 'F3', 'A3', 'C4', 'E4']], [53, 53.9, 'G2', ['D3', 'G3', 'B3', 'D4', 'F4']]];
+      for (const [a, b, r, ns] of chs) {
+        choir(a, b, ns, a === 49 ? 0.36 : 0.3, { att: a === 49 ? 0.05 : 0.35, rel: 0.8 });
+        pad(a, b, ns.map((n) => hz(n) * 2), 0.08, { sine: true, att: 0.4, rel: 0.8, hall: 0.4 });
+        sub(a, b, r, 0.3, { att: 0.3, rel: 0.4 });
+      }
+      gong(49, hz('F2'), 0.4);
+      crash(49, 0.4, { dec: 2.5, hall: 0.4 });
+      fmBell(49, hz('C6'), 0.3, { ratio: 3.5, index: 2, dec: 2.5 });
+      fmBell(49, hz('F5'), 0.28, { ratio: 3.5, index: 2, dec: 2.5 });
+      glock(49, hz('A6'), 0.3);
+      taiko(49, 0.6, 55, { hall: 0.4 });
+      gliss(49, ['F3', 'A3', 'C4', 'E4', 'F4', 'A4', 'C5', 'E5', 'F5', 'A5', 'C6', 'E6'], 0.06, 0.22);
+      // the theme on celestial bells, C major
+      [[50, 'C6'], [50.5, 'E6'], [51, 'G6'], [52, 'F6'], [52.5, 'E6'], [53, 'F6']].forEach(([t, n]) => {
+        glock(t, hz(n), 0.22, { dec: 2 });
+        fmBell(t, hz(n), 0.1, { ratio: 1, index: 1.5, dec: 1.5, delay: 0.15 });
+      });
+      for (let t = 49.5; t < 54; t += 0.5) kick(t, 0.22, 'felt');
+      for (let k = 0; k < 18; k++) {
+        const ns = ['C6', 'E6', 'G6', 'A6', 'C7'];
+        glock(49.375 + k * 0.25, hz(ns[Math.floor(R('tw', k) * ns.length)]), 0.05, { dec: 1.2, pan: (R('twp', k) - 0.5), delay: 0.2 });
+      }
+      revSwell(53.3, 0.67, 0.4, { hi: true });
+    }
+
+    // ============================================================ 54-59 DAY COUNTER
+    if (on(54, 59)) {
+      comedy(54, 58.5, { kick: true });
+      for (const t of [54, 56, 58]) {
+        nz(t, 0.35, { type: 'bandpass', q: 1.3, f: [[0, 3500], [0.3, 900, 'exp']], amp: [[0, 0], [0.003, 0.55], [0.06, 0.3, 'exp'], [0.35, FLOOR, 'exp']], panEnv: [[0, -0.6], [0.35, 0.7, 'lin']], stereo: true, key: 'page' });
+        flutter(t + 0.02, 0.3, [0, 0.06, 0.12, 0.18], { vel: 0.25, f0: 2500, f1: 1200, pan: 0.5 });
+      }
+      // the tallies roll up
+      for (const [t, len, n] of [[54.3, 0.6, 12], [56.3, 0.7, 16]]) {
+        play(t, len, () => grainBuffer(E.ctx, ['ratchet', t], len, Array.from({ length: n }, (_, i) => ({ t: (i * len) / n, dur: 0.012, amp: 0.3, pan: 0.3, f: 1800 + i * 90, q: 4, att: 0.0005, dec: 0.003 }))), 0.6, { bus: 'sfx', sustain: false });
+      }
+      // 58.5 stamp THUD
+      kick(58.5, 1.0, 'thud');
+      taiko(58.5, 0.9, 60, { dec: 0.5 });
+      nz(58.5, 0.09, { type: 'bandpass', q: 0.7, f: [[0, 1500]], amp: perc(0.6, 0.001, 0.05), key: 'stamp' });
+      tock(58.5, 0.4, 180, { bus: 'sfx' });
+      E.duck(58.5, 0.6);
+    }
+
+    // ============================================================ 59-68 BURGER CHART / INVESTOR CALL: synth trader beat
+    if (on(59, 68)) {
+      const call = (t) => t >= 64 - 1e-6 && t < 65.5 - 1e-6;
+      for (const [a, r, ns] of [[59, 'A1', ['A3', 'C4', 'E4']], [61, 'F1', ['F3', 'A3', 'C4']], [63, 'C2', ['G3', 'C4', 'E4']], [65, 'G1', ['G3', 'B3', 'D4']], [67, 'A1', ['A3', 'C4', 'E4']]]) {
+        const b = Math.min(a + 2, 68);
+        pad(a, b, ns, 0.18, { att: 0.02, rel: 0.1, cut0: 900, cut1: 2200, hall: 0.1 });
+        for (let k = 0; a + k * 0.25 < b - 1e-6; k++) if (!call(a + k * 0.25)) bass(a + k * 0.25, k % 2 ? hz(r) * 2 : r, 0.18, 0.42);
+        const arp = [ns[0], ns[1], ns[2], hz(ns[0]) * 2, ns[2], ns[1]];
+        for (let k = 0; a + k * 0.125 < b - 1e-6; k++) if (!call(a + k * 0.125)) pluck(a + k * 0.125, arp[k % arp.length], 0.12, { dec: 0.18, bright: 10, delay: 0.1, pan: k % 2 ? 0.3 : -0.3 });
+      }
+      for (let t = 59; t < 68 - 1e-6; t += 0.5) {
+        const c = call(t);
+        const back = Math.round((t - 59) / 0.5) % 2 === 1;
+        if (!c) {
+          kick(t, 0.8, 'full');
+          E.duck(t, 0.5);
+          if (back) clap(t, 0.42);
+          hat(t + 0.25, 0.08, true);
+        }
+        hat(t, 0.04);
+        hat(t + 0.125, 0.025);
+        hat(t + 0.375, 0.03);
+      }
+      crash(59, 0.45);
+      // the theme on the synth lead, cut off by the phone
+      lead(motif(61, 'A4', 'min', 0.25).map(([t, f]) => [t, f, 0.02]), 64.3, 0.2, { delay: 0.2 });
+      // 61 ALL-TIME HIGH bling
+      ting(61, hz('A6'), 0.3);
+      glass(61.03, hz('E7'), 0.12);
+      // 64 phone buzz, 65.5 decline swipe
+      phoneBuzz(64, 0.4, 0.45);
+      phoneBuzz(64.6, 0.4, 0.45);
+      phoneBuzz(65.2, 0.25, 0.45);
+      nz(65.5, 0.22, { type: 'bandpass', q: 1.2, f: [[0, 4500], [0.2, 900, 'exp']], amp: [[0, 0], [0.002, 0.6], [0.22, FLOOR, 'exp']], panEnv: [[0, 0.6], [0.2, -0.6, 'lin']], stereo: true, key: 'swipe' });
+      glide(65.5, 520, 130, 0.3, 0.25, { bus: 'sfx' });
+      stab(65.5, ['E3', 'Bb3'], 0.3, { len: 0.3, f: 900 });
+      kick(65.5, 0.7, 'thud');
+      // 67 another bite
+      crunch(67, 0.45, 'bite');
+      revSwell(67.3, 0.665, 0.4);
+    }
+
+    // ============================================================ 68-71 MEANWHILE: eyecatch
+    if (on(68, 71)) {
+      impact(68, 0.9);
+      whoosh(68, 0.5, 0.5, { pan: [-0.9, 0.9] });
+      [[68, 'D5'], [68.125, 'F5'], [68.25, 'A5']].forEach(([t, n]) => brass(t, [n, hz(n) / 2], 0.1, 0.4));
+      [['D6', 0], ['F6', 0.06], ['A6', 0.12], ['D7', 0.18]].forEach(([n, d]) => glock(68 + d, hz(n), 0.22));
+      // MEANWHILE... and IN YEREVAN slam in
+      taiko(68.5, 0.9, 55);
+      brass(68.5, ['Bb3', 'D4', 'F4', 'Bb4'], 0.35, 0.5);
+      crash(68.5, 0.3);
+      taiko(69.5, 0.8, 60);
+      brass(69.5, ['C4', 'E4', 'G4', 'C5'], 0.45, 0.5);
+      [['C6', 0], ['E6', 0.08], ['G6', 0.16]].forEach(([n, d]) => glock(69.5 + d, hz(n), 0.18));
+      sub(68.5, 69.4, 'Bb1', 0.4);
+      sub(69.5, 70.8, 'C2', 0.4);
+      // Goofy's angry vein pops, with a tiny growl
+      boop(70, 'G5', 0.35);
+      bark(70.06, 0.1, { f: 720 });
+      for (let t = 70.25; t < 71; t += 0.25) tock(t, 0.1, Math.round(t * 4) % 2 ? 1000 : 1400);
+    }
+
+    // ============================================================ 71-75 GRANT WALK: whistle in the park (G major)
+    if (on(71, 75)) {
+      const g = { bright: 0.4, t60: 2.2, len: 2, lp: 3200, room: 0.2, hall: 0.15 };
+      for (const [t, ns] of [[71, ['G2', 'D3', 'B3', 'D3']], [72, ['E2', 'B2', 'G3', 'B2']], [73, ['C3', 'G3', 'E4', 'G3']], [74, ['D3', 'A3', 'F#4', 'A3']]]) ns.forEach((n, i) => ks(t + i * 0.25, n, i ? 0.3 : 0.42, g));
+      pad(71, 74.95, ['G3', 'B3', 'D4'], 0.07, { sine: true, att: 0.5, rel: 0.1 });
+      wind(71, 75, [[0, 0], [0.5, 0.04], [3.8, 0.04], [4, 0]]);
+      for (const t of [71.6, 71.68, 72.9, 73.7, 73.78, 74.4]) glide(t, 3200 + R('bird', t) * 900, 4300, 0.05, 0.04, { bus: 'amb', hall: 0.2, pan: 0.5 });
+      for (let t = 71; t < 75; t += 0.25) shaker(t, t % 0.5 ? 0.03 : 0.05, 0.3);
+      whistleLine([[71.25, 'B5', 0.5], [71.75, 'D6', 0.25], [72, 'G6', 0.75], [72.75, 'E6', 0.25], [73, 'C6', 0.5], [73.5, 'E6', 0.5], [74, 'D6', 0.25], [74.25, 'C6', 0.25], [74.5, 'A5', 0.45]], 74.95, 0.15);
+    }
+
+    // ============================================================ 75-79 GOOFY SENSES: the music stops
+    if (on(75, 79)) {
+      scratch(75, 0.55);
+      pad(75.1, 79, ['A1', 'Bb1', 'E2'], 0.25, { att: 1.0, rel: 0.05, cut0: 300, cut1: 900 });
+      sub(75.1, 78.95, 'A1', 0.3, { att: 1.0, rel: 0.05 });
+      bowed([[75.5, 'E6']], 78.95, 0.05, { att: 1.5, cut: 5000, rel: 0.05 });
+      bowed([[75.5, 'F6']], 78.95, 0.04, { att: 1.5, cut: 5000, rel: 0.05 });
+      wind(75, 79, [[0, 0], [1, 0.05], [3.9, 0.07], [4, 0]]);
+      // 76 menace rumble
+      taiko(76, 1.0, 42, { dec: 1.8, hall: 0.4 });
+      gong(76, hz('A1'), 0.5);
+      brass(76, ['A2', 'Bb2', 'E3'], 0.6, 0.45);
+      horn([[76, 'E2']], 78.9, 0.22);
+      horn([[76, 'Bb2']], 78.9, 0.16);
+      nz(76, 3, { type: 'lowpass', q: 0.7, f: [[0, 140], [3, 260, 'exp']], amp: [[0, 0], [0.05, 0.5], [3, 0.7, 'lin']], sustain: true, stereo: true, key: 'rumble' });
+      for (const [t, v] of [[77, 0.4], [77.75, 0.45], [78.25, 0.5], [78.5, 0.55], [78.625, 0.5], [78.75, 0.6], [78.875, 0.65]]) taiko(t, v, 65, { dec: 0.5 });
+      // 78 glowing eyes, 78.5 UH-OH
+      glass(78, hz('E7'), 0.18, { dec: 1 });
+      ting(78, hz('F7'), 0.2);
+      plip(78.5, 600, 300, 0.2);
+      revSwell(78.2, 0.765, 0.55);
+    }
+
+    // ============================================================ 79-84 RAMPAGE: WOOF on every beat
+    if (on(79, 84)) {
+      for (let k = 0; k < 10; k++) {
+        const t = 79 + k * 0.5;
+        const big = k === 5;
+        bark(t, big ? 1.0 : 0.85, { big, pan: k % 2 ? 0.25 : -0.25, f: 470 + (k % 3) * 40 });
+        E.duck(t, 0.6);
+      }
+      impact(79, 0.85);
+      impact(81.5, 0.9);
+      battleDrums(79, 83.75, 0.7, { snare: [2, 6, 10, 14] });
+      for (let k = 0; k < 9; k++) {
+        const t = 79.25 + k * 0.5;
+        const ch = t < 80 ? ['E3', 'B3', 'E4'] : t < 81 ? ['F3', 'C4', 'F4'] : t < 82 ? ['E3', 'B3', 'E4'] : t < 83 ? ['G3', 'D4', 'G4'] : ['F3', 'C4', 'F4'];
+        brass(t, ch, 0.15, 0.3);
+      }
+      for (let k = 0; k < 38; k++) {
+        const t = 79 + k * 0.125;
+        const r = t < 80 ? 'E2' : t < 81 ? 'F2' : t < 82 ? 'E2' : t < 83 ? 'G2' : 'F2';
+        pluck(t, k % 4 === 2 ? hz(r) * 2 : r, 0.16, { dec: 0.12, bright: 7 });
+        if (k % 8 === 0) sub(t, Math.min(t + 1, 83.75), r.replace('2', '1'), 0.45);
+      }
+    }
+
+    // ============================================================ 84-89 GRANT CALMS: harp and pads (F major)
+    if (on(84, 89)) {
+      gliss(84, ['F3', 'A3', 'C4', 'F4', 'A4', 'C5', 'F5', 'A5', 'C6'], 0.07, 0.3);
+      const chs = [[84, 86, 'F2', ['F3', 'A3', 'C4', 'E4'], ['F3', 'C4', 'F4', 'A4', 'C5', 'A4', 'F4', 'C4']], [86, 87, 'C2', ['E3', 'G3', 'C4', 'E4'], ['C3', 'G3', 'C4', 'E4']], [87, 88, 'Bb1', ['D3', 'F3', 'Bb3', 'D4'], ['Bb2', 'F3', 'Bb3', 'D4']], [88, 89, 'A1', ['C#3', 'E3', 'G3', 'A3'], ['A2', 'E3', 'G3', 'C#4']]];
+      for (const [a, b, r, ns, arp] of chs) {
+        pad(a, b, ns, 0.24, { att: 0.6, rel: 0.6, cut0: 1000, cut1: 1500, hall: 0.3 });
+        sub(a, b, r, 0.3, { att: 0.3, rel: 0.3 });
+        const s0 = a === 84 ? 84.75 : a;
+        for (let k = 0; s0 + k * 0.25 < b - 1e-6; k++) ks(s0 + k * 0.25, arp[k % arp.length], 0.32, harp);
+      }
+      for (const t of [84.7, 85.3, 86.1, 87.4]) plip(t, 500 + R('bub', t) * 400, 1100, 0.07);
+      whine(87.6, 0.7, 650, 900, 600, 0.08);
+    }
+
+    // ============================================================ 89-95 I MISS HAYK: sad epic strings + howl (D minor)
+    if (on(89, 95)) {
+      for (const [a, b, r, ns] of [[89, 91, 'D2', ['D3', 'A3', 'D4', 'F4']], [91, 92, 'Bb1', ['Bb2', 'F3', 'Bb3', 'D4']], [92, 93, 'G1', ['G2', 'D3', 'G3', 'Bb3']], [93, 94, 'F1', ['F2', 'C3', 'F3', 'A3']], [94, 95, 'D2', ['D3', 'A3', 'D4', 'F4']]]) {
+        pad(a, b, ns, 0.24, { att: 0.25, rel: 0.4, cut0: 1200, cut1: 2600, detune: 12, hall: 0.4 });
+        sub(a, b, r, 0.35, { att: 0.1, rel: 0.3 });
+      }
+      // the theme on strings, slowed to quarters, the celli an octave down
+      const ph = [[89, 'D4'], [89.5, 'F4'], [90, 'A4'], [91, 'G4'], [91.5, 'F4'], [92, 'G4'], [93, 'A4'], [93.75, 'C5'], [94, 'D5']];
+      bowed(ph, 94.85, 0.28, { att: 0.08 });
+      bowed(ph.map(([t, n]) => [t, hz(n) / 2]), 94.85, 0.18, { att: 0.08 });
+      taiko(89, 0.8, 50, { hall: 0.4 });
+      ks(89, 'D4', 0.35, harp);
+      howl(89, 0.9, [[0, 380], [0.5, 620, 'exp'], [0.9, 560, 'exp']], 0.3);
+      // 90 the big howl, with a bark attack
+      bark(90, 0.5, { big: true, f: 520 });
+      howl(90, 3.0, [[0, 360], [0.6, 880, 'exp'], [1.8, 860, 'exp'], [2.4, 600, 'exp'], [3, 340, 'exp']], 0.5, { cave: 0.3 });
+      impact(90, 0.85, { dec: 2.5 });
+      taiko(91, 0.45, 55, { hall: 0.3 });
+      taiko(92, 0.5, 55, { hall: 0.3 });
+      // 93 zoom-out whoosh, the howl echoes away
+      whoosh(93, 1.6, 0.5, { f0: 3000, fp: 1800, f1: 250, pan: [0.3, -0.3], hall: 0.4 });
+      crash(93, 0.25, { dec: 2 });
+      howl(93.35, 1.2, [[0, 700], [0.6, 820, 'exp'], [1.2, 500, 'exp']], 0.14, { cave: 0.5, hall: 0.4 });
+      howl(94.2, 0.7, [[0, 650], [0.35, 760, 'exp'], [0.7, 480, 'exp']], 0.06, { cave: 0.6, hall: 0.5 });
+    }
+
+    // ============================================================ 95-100 VIDEO CALL
+    if (on(95, 100)) {
+      for (const r of [95, 95.5])
+        [['E6', 0], ['G#6', 0.083], ['B6', 0.166], ['E7', 0.25]].forEach(([n, d]) => {
+          fmBell(r + d, hz(n), 0.25, { ratio: 2, index: 1.2, dec: 0.3 });
+          marimba(r + d, hz(n) / 2, 0.15);
+        });
+      // "HAYK... COME BACK...": Goofy's sad music box
+      [[96, 'A5'], [96.5, 'C6'], [97, 'E6']].forEach(([t, n]) => {
+        glock(t, hz(n), 0.14, { dec: 1.6 });
+        piano(t, hz(n) / 2, 0.16);
+      });
+      piano(96, 'A2', 0.2);
+      pad(96, 97.4, ['A3', 'C4', 'E4'], 0.08, { sine: true, att: 0.4, rel: 0.1 });
+      // 97.5 shock sting
+      impact(97.5, 0.9);
+      brass(97.5, ['A3', 'C4', 'Eb4', 'F#4'], 0.5, 0.55);
+      glass(97.5, hz('C7'), 0.15);
+      bowed([[97.6, 'Eb5']], 99.7, 0.07, { att: 0.3, rel: 0.1, vib: 0.02 });
+      bowed([[97.6, 'D5']], 99.7, 0.06, { att: 0.3, rel: 0.1, vib: 0.02 });
+      // 98.5 the burger starts to fall: slide whistle
+      whistle(98.5, 1.2, 1500, 350, 0.18);
+    }
+
+    // ============================================================ 100-104 BURGER DROP: slow-motion heartbeat
+    if (on(100, 104)) {
+      const hb = (t, v) => {
+        kick(t, v, 'heart');
+        tock(t, v * 0.3, 420, { bus: 'drums', dec: 0.05 });
+        kick(t + 0.26, v * 0.7, 'heart');
+        E.duck(t, 0.5);
+      };
+      hb(100, 0.95);
+      hb(101, 0.85);
+      pad(100, 102, ['A2', 'E3', 'A3'], 0.14, { att: 0.8, rel: 0.2, cut0: 600, cut1: 900, hall: 0.4 });
+      sub(100, 101.95, 'A1', 0.3, { att: 0.4 });
+      glass(100, hz('A6'), 0.08, { dec: 3 });
+      revSwell(101, 0.97, 0.35, { fTop: 1500 });
+      // 102 burger impact
+      impact(102, 1.1);
+      piano(102, 'A1', 0.5);
+      piano(102, 'E2', 0.4);
+      nz(102, 0.25, { type: 'lowpass', f: [[0, 2500], [0.25, 400, 'exp']], amp: perc(0.6, 0.001, 0.12), key: 'splat' });
+      // resolve: I'M COMING HOME, GOOFY!
+      for (const [a, b, r, ns] of [[102.5, 103, 'F1', ['F3', 'A3', 'C4']], [103, 103.95, 'G1', ['G3', 'B3', 'D4']]]) {
+        pad(a, b, ns, 0.2, { att: 0.15, rel: 0.05, cut0: 1200, cut1: 2800 });
+        sub(a, b, r, 0.4);
+      }
+      bowed([[102.5, 'C5'], [103, 'D5'], [103.5, 'E5']], 103.95, 0.2, { att: 0.2, rel: 0.05 });
+      for (const t of [102.5, 103, 103.5]) taiko(t, 0.5, 60);
+      roll(103, 104, 0.1, 0.5);
+      revSwell(103, 0.965, 0.5);
+    }
+
+    // ============================================================ 104-108 FLY HOME: heroic brass (C major)
+    if (on(104, 108)) {
+      impact(104, 1.0);
+      const ph = motif(104, 'C5', 'maj', 0.25).map(([t, f]) => [t, f]);
+      horn(ph, 107.9, 0.36, { hall: 0.3 });
+      horn(ph.map(([t, f]) => [t, f / 2]), 107.9, 0.3, { hall: 0.25 });
+      bowed(ph.map(([t, f]) => [t, f, 0.04]), 107.9, 0.12, { att: 0.05 });
+      for (const [t, root, ns] of [[104, 'C2', ['C3', 'G3', 'C4', 'E4']], [105, 'F2', ['F3', 'A3', 'C4', 'F4']], [106, 'G2', ['G3', 'B3', 'D4', 'G4']], [107, 'C2', ['C3', 'G3', 'C4', 'E4']]]) {
+        pad(t, t + (t === 107 ? 0.9 : 1), ns, 0.2, { att: 0.05, rel: 0.2, cut0: 1800, cut1: 2600 });
+        sub(t, t + (t === 107 ? 0.9 : 1), root, 0.5);
+        for (let k = 0; k < 8; k++) pluck(t + k * 0.125, k % 4 === 2 ? hz(root) * 2 : root, 0.24, { dec: 0.13, bright: 7 });
+      }
+      for (const [t, ns] of [[104.75, ['E4', 'G4', 'C5']], [105.75, ['F4', 'A4', 'C5']]]) brass(t, ns, 0.15, 0.35);
+      battleDrums(104, 107.5, 0.9);
+      crash(107, 0.4);
+      // 106.5 the plane lands: SKRRT and a dust thud
+      skrrt(106.5, 0.75, 0.9);
+      taiko(106.5, 0.8, 55);
+      nz(106.5, 0.8, { type: 'lowpass', q: 0.6, f: [[0, 1800], [0.8, 300, 'exp']], amp: [[0, 0], [0.01, 0.3], [0.8, FLOOR, 'exp']], stereo: true, key: 'dust' });
+    }
+
+    // ============================================================ 108-114 REUNION (D major)
+    if (on(108, 114)) {
+      gliss(108, ['D3', 'F#3', 'A3', 'D4', 'F#4', 'A4', 'D5', 'F#5', 'A5', 'D6'], 0.06, 0.3);
+      glock(108, hz('F#6'), 0.15);
+      const chs = [[108, 109, 'B1', ['B2', 'F#3', 'A3', 'D4']], [109, 109.5, 'G1', ['G2', 'D3', 'F#3', 'B3']], [109.5, 110, 'A1', ['A2', 'E3', 'G3', 'C#4']], [110, 111, 'D2', ['D3', 'A3', 'D4', 'F#4']], [111, 112, 'G1', ['G2', 'D3', 'G3', 'B3']], [112, 113, 'A1', ['A2', 'E3', 'A3', 'C#4']], [113, 114, 'D2', ['D3', 'A3', 'D4', 'F#4']]];
+      for (const [a, b, r, ns] of chs) {
+        pad(a, b, ns, 0.2, { att: a < 110 ? 0.3 : 0.05, rel: 0.3, cut0: 1500, cut1: 2600, detune: 11, hall: 0.35 });
+        sub(a, b, r, 0.4, { att: 0.05 });
+        if (a >= 110) choir(a, b, ns.slice(1), 0.24, { att: 0.2, rel: 0.4 });
+      }
+      // lead-in, then the theme broad on strings with bells
+      const m = motif(110, 'D5', 'maj', 0.25);
+      const ph = [[108, 'F#5'], [109, 'G5'], [109.5, 'E5'], [109.75, 'C#5'], ...m.map(([t, f]) => [t, f])];
+      bowed(ph, 113.9, 0.3, { att: 0.2 });
+      bowed(ph.map(([t, f]) => [t, hz(f) / 2]), 113.9, 0.2, { att: 0.2 });
+      m.forEach(([t, f]) => glock(t, f * 2, 0.14, { dec: 1.4 }));
+      // 110 the hug
+      impact(110, 1.0, { dec: 2.5 });
+      [['D6', 0], ['F#6', 0.03], ['A6', 0.06]].forEach(([n, d]) => fmBell(110 + d, hz(n), 0.22, { ratio: 3.5, index: 1.8, dec: 2 }));
+      sparkle(110.02, 0.8);
+      for (let i = 0; i < 4; i++) plip(110.15 + i * 0.12, 900 + i * 150, 1500 + i * 150, 0.12);
+      for (let t = 110.5; t < 114; t += 0.5) kick(t, Math.round(t * 2) % 2 ? 0.3 : 0.5, 'felt');
+      for (const t of [111, 112, 113]) crash(t, 0.12, { dec: 1.5 });
+      roll(113.5, 114, 0.15, 0.45);
+    }
+
+    // ============================================================ 114-120 THE END: happy ending (D major)
+    if (on(114, 120)) {
+      crash(114, 0.5);
+      for (const [t, root, ns, g] of [[114, 'D2', ['D4', 'F#4', 'A4'], CH.gD], [115, 'G2', ['G3', 'B3', 'D4'], CH.gGmaj], [116, 'A2', ['A3', 'C#4', 'E4'], CH.gA], [117, 'D2', ['D4', 'F#4', 'A4'], CH.gD]]) {
+        const b = t === 117 ? 117.5 : t + 1;
+        pad(t, b, ns, 0.18, { att: 0.03, rel: 0.1, cut0: 1800, cut1: 2600 });
+        for (let k = 0; t + k * 0.25 < b - 1e-6; k++) bass(t + k * 0.25, k % 2 ? hz(root) * 2 : root, 0.2, 0.45);
+        for (let k = 0; t + k * 0.25 < b - 1e-6; k++) strum(t + k * 0.25, k % 2 ? g.slice(-3) : g, k % 2 ? 0.14 : 0.26, { up: k % 2 === 1, len: 0.6 });
+      }
+      for (let t = 114; t < 117.5 - 1e-6; t += 0.5) {
+        const back = Math.round((t - 114) / 0.5) % 2 === 1;
+        kick(t, 0.8, 'full');
+        E.duck(t, 0.4);
+        if (back) {
+          snare(t, 0.5);
+          clap(t, 0.3);
+        }
+        hat(t + 0.25, 0.07);
+        hat(t, 0.05);
+      }
+      // the theme, triumphant, on horns, lead and glock
+      const m = motif(114, 'D5', 'maj', 0.25);
+      const ph = m.map(([t, f]) => [t, f]);
+      horn(ph, 117.45, 0.32, { hall: 0.25 });
+      lead(m.map(([t, f]) => [t, f, 0.02]), 117.45, 0.1, { delay: 0.1 });
+      m.forEach(([t, f]) => glock(t, f * 2, 0.1));
+      // the stats card ticks, one line a beat
+      for (const t of [115, 115.5, 116, 116.5]) {
+        glock(t, hz('A6'), 0.16, { dec: 0.6 });
+        tock(t, 0.14, 2200);
+      }
+      // 117.5 THE END?
+      impact(117.5, 1.0, { dec: 2 });
+      brass(117.5, ['D4', 'F#4', 'A4', 'B4', 'D5'], 0.9, 0.55, { rel: 0.5 });
+      strum(117.5, CH.gD, 0.5, { spread: 0.01, len: 2, t60: 2 });
+      fmBell(117.5, hz('D6'), 0.25, { ratio: 3.5, index: 1.8, dec: 1.8 });
+      glock(117.5, hz('D7'), 0.2);
+      sub(117.5, 118.9, 'D1', 0.5, { att: 0.01, rel: 0.6 });
+      pad(117.5, 118.7, ['D3', 'A3', 'D4', 'F#4', 'B4'], 0.16, { att: 0.02, rel: 0.8, cut0: 2500, cut1: 900, hall: 0.3 });
+      // "?": a questioning boop and one small happy woof
+      plip(118.1, 520, 900, 0.3);
+      bark(118.6, 0.22, { f: 720, pan: 0.2 });
     }
   }
 

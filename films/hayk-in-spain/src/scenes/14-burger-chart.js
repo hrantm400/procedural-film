@@ -56,8 +56,11 @@
 
   function burgerSprite(F, red) {
     return FILM.lib.cached(ID + '-burger-' + (red ? 'r' : 'g'), () => {
-      const c = FILM.makeCanvas(240, 200);
-      const g = c.getContext('2d');
+      // drawn at its on-screen size (CW wide) so the per-frame draw barely resamples
+      const k = CW / 240;
+      const c = FILM.makeCanvas(Math.ceil(240 * k), Math.ceil(200 * k));
+      const g = c.getContext('2d', { willReadFrequently: true });
+      g.scale(k, k);
       F.burger(g, 120, 112, 1);
       if (red) {
         g.globalCompositeOperation = 'source-atop';
@@ -71,7 +74,7 @@
   function background(F) {
     return FILM.lib.cached(ID + '-bg', () => {
       const c = FILM.makeCanvas(1080, 1920);
-      const g = c.getContext('2d');
+      const g = c.getContext('2d', { willReadFrequently: true });
       const P = F.pal;
       g.fillStyle = P.termBg;
       g.fillRect(0, 0, 1080, 1920);
@@ -134,7 +137,8 @@
       ctx.translate(-540, -900);
 
       // 1. background
-      ctx.drawImage(background(F), 0, 0);
+      // core sets imageSmoothingQuality 'high', which makes a scaled full-frame drawImage cost ~45 ms
+      ctx.save(); ctx.imageSmoothingQuality = 'low'; ctx.drawImage(background(F), 0, 0); ctx.restore();
       // beat pulse on the grid
       const bp = F.beatPulse(t, 0.5, 0.14);
       if (bp > 0.02) {

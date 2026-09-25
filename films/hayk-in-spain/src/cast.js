@@ -212,7 +212,7 @@
         P.aL = [1.1, -1.9]; P.aR = [-1.1, 1.9]; P.hands = ['open', 'open']; P.head = 0.1;
         break;
       case 'armsCrossed':
-        P.aL = [0.5, 1.9]; P.aR = [-0.5, -1.9]; P.hands = ['fist', 'fist'];
+        P.aL = [0.35, -2.3]; P.aR = [-0.35, 2.3]; P.hands = ['fist', 'fist'];
         break;
       default:
         break;
@@ -591,7 +591,7 @@
       if (!SIL) { ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(-44, -8); ctx.lineTo(-34, 4); ctx.moveTo(16, -8); ctx.lineTo(26, 4); ctx.stroke(); }
       ctx.restore();
     }
-    if (o.crown) F.crown(ctx, 0, -70, 0.62, { rot: -0.08 });
+    if (o.crown) F.crown(ctx, 0, -70, 0.62, { rot: -0.08, color: SIL || undefined, flat: !!SIL });
     ctx.restore();
     const hr = P.head + (o.headTilt || 0);
     const hp = (lx, ly) => { lx *= HS; ly *= HS; return W(hx + lx * Math.cos(hr) - ly * Math.sin(hr), headY + lx * Math.sin(hr) + ly * Math.cos(hr)); };

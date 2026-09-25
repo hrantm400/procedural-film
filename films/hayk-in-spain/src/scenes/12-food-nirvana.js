@@ -311,13 +311,13 @@
         }
         ctx.fill();
         ctx.restore();
-        const r = 200 + L.ease.inQuad(u) * 1700;
+        const r = 220 + L.ease.inQuad(u) * 1000;
         const gr = ctx.createRadialGradient(gx, gy, r * 0.35, gx, gy, r);
         gr.addColorStop(0, 'rgba(255,255,255,1)');
         gr.addColorStop(1, 'rgba(255,255,255,0)');
         ctx.fillStyle = gr;
         ctx.fillRect(0, 0, W, H);
-        F.flash(ctx, hitFrames(T_FLASH, 2) ? 1 : 0.3 + 0.68 * L.ease.inQuad(u), '#fffdf4');
+        F.flash(ctx, hitFrames(T_FLASH, 2) ? 1 : 0.3 + 0.5 * L.ease.inQuad(u), '#fffdf4');
       }
     },
   });
