@@ -342,18 +342,66 @@
     ctx.beginPath(); ctx.moveTo(x, base - h); ctx.lineTo(x, base - h - 40); ctx.stroke();
     ctx.restore();
   }
-  function block(ctx, x, y, w, h, d, col, seed) {
-    // simple oblique box: front face, top face, windows
-    ctx.fillStyle = col; ctx.fillRect(x, y - h, w, h);
-    ctx.fillStyle = 'rgba(255,255,255,0.45)';
-    ctx.beginPath(); ctx.moveTo(x, y - h); ctx.lineTo(x + d * 0.6, y - h - d); ctx.lineTo(x + w + d * 0.6, y - h - d); ctx.lineTo(x + w, y - h); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = 'rgba(120,70,70,0.25)';
-    ctx.beginPath(); ctx.moveTo(x + w, y); ctx.lineTo(x + w, y - h); ctx.lineTo(x + w + d * 0.6, y - h - d); ctx.lineTo(x + w + d * 0.6, y - d); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = 'rgba(80,90,150,0.45)';
-    const cw = Math.max(6, w / 6), rh = Math.max(6, h / 5);
-    for (let r = 0; r < 4; r++) for (let c = 0; c < 5; c++) if (h01('w', seed, r, c) > 0.25) ctx.fillRect(x + cw * 0.6 + c * cw, y - h + rh * 0.6 + r * rh, cw * 0.5, rh * 0.45);
-    ctx.strokeStyle = 'rgba(90,50,60,0.6)'; ctx.lineWidth = 2;
-    ctx.strokeRect(x, y - h, w, h);
+  // Yerevan blocks: layout memoised once (seeded, t-independent), drawn row by row with the
+  // windows of a row batched into one path.
+  let CITY = null;
+  function city() {
+    if (CITY) return CITY;
+    const park = [415, 950, 670, 1340]; // x0, y0, x1, y1 kept clear for the park + Cascade
+    CITY = [];
+    for (let r = 0; r < 16; r++) {
+      const y = 740 + r * r * 4.2 + r * 40;
+      if (y > 2300) break;
+      const sc = 0.5 + r * 0.14;
+      const row = { y, sc, blocks: [], trees: [], wins: [] };
+      let x = -380 + h01('rx', r) * 60;
+      let i = 0;
+      while (x < 1460) {
+        const w = (50 + h01('bw', r, i) * 70) * sc, h = (40 + h01('bh', r, i) * 90) * sc, d = 16 * sc;
+        const inPark = x + w > park[0] && x < park[2] && y > park[1] - 20 && y - h < park[3];
+        if (!inPark) {
+          if (h01('tr', r, i) < 0.2) row.trees.push([x + w / 2, y - 14 * sc, 16 * sc]);
+          else {
+            row.blocks.push({ x, w, h, d, col: TUFF[(r + i) % TUFF.length] });
+            const cw = Math.max(6, w / 6), rh = Math.max(6, h / 5);
+            for (let q = 0; q < 4; q++) for (let c = 0; c < 5; c++) if (h01('w', r, i, q, c) > 0.25) row.wins.push([x + cw * 0.6 + c * cw, y - h + rh * 0.6 + q * rh, cw * 0.5, rh * 0.45]);
+          }
+        }
+        x += w + (8 + h01('gap', r, i) * 16) * sc;
+        i++;
+      }
+      CITY.push(row);
+    }
+    return CITY;
+  }
+  function drawCity(ctx) {
+    city().forEach((row) => {
+      const y = row.y;
+      ctx.fillStyle = '#c9c2c8'; ctx.fillRect(-400, y + 2, 1880, 10 * row.sc);
+      ctx.fillStyle = K.tree;
+      ctx.beginPath();
+      row.trees.forEach(([x, ty, r]) => { ctx.moveTo(x + r, ty); ctx.arc(x, ty, r, 0, TAU); });
+      ctx.fill();
+      row.blocks.forEach(({ x, w, h, d, col }) => {
+        ctx.fillStyle = col; ctx.fillRect(x, y - h, w, h);
+      });
+      ctx.fillStyle = 'rgba(255,255,255,0.45)';
+      ctx.beginPath();
+      row.blocks.forEach(({ x, w, h, d }) => { ctx.moveTo(x, y - h); ctx.lineTo(x + d * 0.6, y - h - d); ctx.lineTo(x + w + d * 0.6, y - h - d); ctx.lineTo(x + w, y - h); ctx.closePath(); });
+      ctx.fill();
+      ctx.fillStyle = 'rgba(120,70,70,0.25)';
+      ctx.beginPath();
+      row.blocks.forEach(({ x, w, h, d }) => { ctx.moveTo(x + w, y); ctx.lineTo(x + w, y - h); ctx.lineTo(x + w + d * 0.6, y - h - d); ctx.lineTo(x + w + d * 0.6, y - d); ctx.closePath(); });
+      ctx.fill();
+      ctx.fillStyle = 'rgba(80,90,150,0.45)';
+      ctx.beginPath();
+      row.wins.forEach(([x, wy, w, h]) => ctx.rect(x, wy, w, h));
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(90,50,60,0.6)'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      row.blocks.forEach(({ x, w, h }) => ctx.rect(x, y - h, w, h));
+      ctx.stroke();
+    });
   }
   function drawL1(ctx, t, zoomInfo) {
     F.sky(ctx, '#7cc6ff', '#ffe6ea', { mid: '#cdeeff', midAt: 0.6, x: -400, y: -400, w: 1880, h: 1060 });
@@ -363,27 +411,7 @@
     ctx.fillStyle = '#e9d9d0'; ctx.fillRect(-400, 640, 1880, 90);
     ctx.fillStyle = '#d9e8c8'; ctx.fillRect(-400, 700, 1880, 1600);
     tvTower(ctx, 930, 760, 300);
-    // rows of pink tuff blocks, growing toward the viewer
-    const park = [415, 950, 670, 1340]; // x0, y0, x1, y1 kept clear for the park + Cascade
-    for (let r = 0; r < 16; r++) {
-      const y = 740 + r * r * 4.2 + r * 40;
-      if (y > 2300) break;
-      const sc = 0.5 + r * 0.14;
-      ctx.fillStyle = '#c9c2c8'; ctx.fillRect(-400, y + 2, 1880, 10 * sc);
-      let x = -380 + h01('rx', r) * 60;
-      let i = 0;
-      while (x < 1460) {
-        const w = (50 + h01('bw', r, i) * 70) * sc, h = (40 + h01('bh', r, i) * 90) * sc, d = 16 * sc;
-        const inPark = x + w > park[0] && x < park[2] && y > park[1] - 20 && y - h < park[3];
-        if (!inPark) {
-          if (h01('tr', r, i) < 0.2) {
-            ctx.fillStyle = K.tree; ctx.beginPath(); ctx.arc(x + w / 2, y - 14 * sc, 16 * sc, 0, TAU); ctx.fill();
-          } else block(ctx, x, y, w, h, d, TUFF[(r + i) % TUFF.length], r * 50 + i);
-        }
-        x += w + (8 + h01('gap', r, i) * 16) * sc;
-        i++;
-      }
-    }
+    drawCity(ctx);
     // the Cascade and the park at the focus
     ctx.fillStyle = K.hill;
     ctx.beginPath(); ctx.ellipse(540, 1000, 200, 110, 0, Math.PI, TAU); ctx.fill();

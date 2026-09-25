@@ -287,7 +287,7 @@
       if (t >= B_SHOUT - 1e-6) {
         const sk = F.shake(t, B_SHOUT, 0.5, 10, 3);
         F.bubble(ctx, "I'M COMING HOME, GOOFY!", 500 + sk[0], 410 + sk[1], {
-          size: 70, maxW: 600, shout: true, t, t0: B_SHOUT, tail: [a.head[0] - 200, a.head[1] - 10], fill: '#ffffff', shake: 6,
+          size: 70, maxW: 600, shout: true, t, t0: B_SHOUT, tail: [a.head[0] - 250, a.head[1] - 40], fill: '#ffffff', shake: 6,
         });
       }
     },
