@@ -46,7 +46,7 @@
     return [PH.x + (jig ? jig[0] : 0) + x * Math.cos(r) - y * Math.sin(r), PH.y + (jig ? jig[1] : 0) + x * Math.sin(r) + y * Math.cos(r)];
   }
   // button centres in phone-local coords (origin = phone centre)
-  const RED = [-50, 150], GREEN = [50, 150];
+  const RED = [-50, 118], GREEN = [50, 118];
 
   // ---------------------------------------------------------------------------
   // cached backgrounds
@@ -234,8 +234,8 @@
         const rx = RED[0] + 106 - slide * 40, ry = RED[1] + 222;
         g.beginPath(); g.arc(rx, ry, 32, 0, TAU); F.fo(g, P.down, 4);
         phoneIcon(g, rx, ry, 2.36, '#ffffff');
-        F.text(g, 'DECLINE', RED[0] + 106, ry + 52, { size: 14, fill: '#ffb3bb', lw: 0 });
-        F.text(g, 'ACCEPT', gx, gy + 52, { size: 14, fill: '#b3ffd6', lw: 0 });
+        F.text(g, 'DECLINE', RED[0] + 106, ry + 46, { size: 14, fill: '#ffb3bb', lw: 0 });
+        F.text(g, 'ACCEPT', gx, gy + 46, { size: 14, fill: '#b3ffd6', lw: 0 });
       } else {
         F.text(g, 'CALL', w / 2, 262, { size: 30, fill: '#ffd0d6', lw: 0 });
         F.text(g, 'ENDED', w / 2, 298, { size: 30, fill: '#ffd0d6', lw: 0 });
