@@ -207,7 +207,7 @@
       g.fillStyle = 'rgba(255,255,255,0.7)';
       g.fillRect(16, 30, 30, 8); g.fillRect(w - 50, 30, 34, 10);
       // caller avatar: a suit with a money-bag head
-      const ax = w / 2, ay = 150;
+      const ax = w / 2, ay = 118;
       if (!declined) {
         const pr = 60 + (t * 2 % 1) * 40;
         g.strokeStyle = `rgba(143,216,255,${1 - (t * 2 % 1)})`; g.lineWidth = 4;
@@ -223,8 +223,8 @@
       F.text(g, '$', ax, ay - 4, { size: 26, fill: '#2a2f45', lw: 0 });
       g.restore();
       if (!declined) {
-        F.text(g, 'INVESTOR', w / 2, 44 + 24, { size: 30, fill: '#ffffff', lw: 0 });
-        F.text(g, 'CALLING...', w / 2, 238, { size: 28, fill: '#8fd8ff', lw: 0 });
+        F.text(g, 'INVESTOR', w / 2, 212, { size: 32, fill: '#ffffff', lw: 0 });
+        F.text(g, 'CALLING...', w / 2, 250, { size: 30, fill: '#8fd8ff', lw: 0 });
         // buttons; the red one slides with the thumb
         const slide = clamp((t - (T_SWIPE - 0.1)) / 0.1);
         const bp = 1 + 0.08 * Math.sin(t * 16);
@@ -369,7 +369,7 @@
         ctx.save();
         ctx.strokeStyle = P.line; ctx.lineWidth = 8; ctx.lineCap = 'round';
         const on = fi % 4 < 2;
-        [[-1, 0], [1, 0]].forEach(([sd]) => {
+        [[1, 0]].forEach(([sd]) => {
           for (let k = 0; k < 3; k++) {
             const r = 60 + k * 34 + (on ? 8 : 0);
             const cx = PH.x + sd * 120 * PH.s, cy = PH.y - 150 * PH.s;
@@ -387,8 +387,8 @@
       const d = [0.552, 0.834]; // hand -> shoulder
       const reach = 44 * ARM_S; // palm centre -> fingertip
       let tip;
-      if (t < 1.15) tip = [rb[0] + 70 + Math.sin(tw * 5) * 6, rb[1] + 70];
-      else if (t < T_SWIPE - 0.1) tip = lerp2([rb[0] + 70, rb[1] + 70], [rb[0] + 6, rb[1] + 2], L.ease.inOutCubic((t - 1.15) / (T_SWIPE - 0.1 - 1.15)));
+      if (t < 1.15) tip = [rb[0] + 40 + Math.sin(tw * 5) * 6, rb[1] + 150];
+      else if (t < T_SWIPE - 0.1) tip = lerp2([rb[0] + 40, rb[1] + 150], [rb[0] + 6, rb[1] + 2], L.ease.inOutCubic((t - 1.15) / (T_SWIPE - 0.1 - 1.15)));
       else if (t < T_SWIPE + 0.12) tip = lerp2([rb[0] + 6, rb[1] + 2], [rb[0] - 170, rb[1] - 26], L.ease.outCubic((t - (T_SWIPE - 0.1)) / 0.22));
       else tip = lerp2([rb[0] - 170, rb[1] - 26], [rb[0] + 60, rb[1] + 150], L.ease.inOutCubic(clamp((t - 2.3) / 0.6)));
       const palm = [tip[0] + d[0] * reach, tip[1] + d[1] * reach];
@@ -412,7 +412,7 @@
       }
       if (t >= T_SWIPE - 1e-6) F.sfx(ctx, 'SWIPE!', 290, 990, t, T_SWIPE, { size: 96, fill: '#ff3b3b', shadowColor: '#5a0a14', rot: -0.18, life: 0.75 });
       F.bubble(ctx, 'MMF... LATER. BURGER FIRST.', 776, 330, {
-        size: 50, maxW: 420, t, t0: T_BUBBLE, tail: [a.mouth[0] + 110, a.mouth[1] - 60], shake: 6,
+        size: 50, maxW: 420, t, t0: T_BUBBLE, tail: [a.mouth[0] + 205, a.mouth[1] - 70], shake: 6,
       });
       if (t >= T_BITE - 1e-6) {
         F.crumbs(ctx, a.mouth[0] - 40, a.mouth[1] + 20, t - T_BITE + FR, { n: 16, seed: 1507, spread: 460, life: 0.9 });

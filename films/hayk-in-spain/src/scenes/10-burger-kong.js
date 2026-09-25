@@ -403,7 +403,7 @@
           const age = t - T_GULP;
           const rx = 790, ry = 520;
           ctx.save();
-          ctx.globalAlpha = clamp(age / 0.12) * 0.7;
+          ctx.globalAlpha = clamp(age / 0.12) * 0.5;
           ctx.fillStyle = '#ffe27a';
           ctx.beginPath();
           const n = 18, rot = age * 0.5;

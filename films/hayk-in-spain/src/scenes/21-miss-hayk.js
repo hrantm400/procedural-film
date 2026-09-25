@@ -37,7 +37,7 @@
   const B_TALK = 3.0; // T 92.0
   const B_ZOOM = 4.0; // T 93.0
   const ZOOM_DUR = 1.6; // globe settles at t 5.6 and holds
-  const ECHOES = [[4.25, 88, 640], [4.8, 62, 520], [5.35, 44, 420]]; // [t0, size, y]
+  const ECHOES = [[4.55, 88, 400], [5.0, 64, 290], [5.4, 52, 420]]; // [t0, size, y]
 
   // ---- L0 geometry
   const GROUND = 1540;
@@ -631,7 +631,12 @@
       ctx.scale(S2, S2);
       ctx.translate(-F2[0], -F2[1]);
       drawL2(ctx, t, S2);
-      drawL2Marks(ctx, t, Math.max(1, S2 * 0.35 + 0.65));
+      const markA = clamp((2.2 - S2) / 1.0);
+      if (markA > 0) {
+        ctx.globalAlpha = markA;
+        drawL2Marks(ctx, t, Math.max(1, S2 * 0.35 + 0.65));
+        ctx.globalAlpha = 1;
+      }
       ctx.restore();
       // L1 Yerevan, feathered, fading when small
       const s1Strength = clamp((1.15 - S1) / 0.35);
