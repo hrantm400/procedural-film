@@ -2114,10 +2114,10 @@
       for (const [t, root, notes] of [[4, 'A1', CH.Am9], [6, 'D2', CH.Dm9], [8, 'F1', CH.Fmaj9]]) {
         const end = Math.min(t + 2, 8.5);
         sub(t, end - 0.1, root, 0.42, { att: 0.02, rel: 0.2 });
-        notes.forEach((n, i) => ep(t + i * 0.014, n, 0.2, { dec: 1.6 }));
+        notes.forEach((n, i) => ep(t + i * 0.014, n, 0.3, { dec: 1.6 }));
         if (t < 8) {
-          notes.forEach((n, i) => ep(t + 0.75 + i * 0.012, n, 0.12, { dec: 1.0 }));
-          notes.slice(1).forEach((n, i) => ep(t + 1.56 + i * 0.012, n, 0.09, { dec: 0.7 }));
+          notes.forEach((n, i) => ep(t + 0.75 + i * 0.012, n, 0.19, { dec: 1.0 }));
+          notes.slice(1).forEach((n, i) => ep(t + 1.56 + i * 0.012, n, 0.14, { dec: 0.7 }));
         }
       }
       tock(4, 0.3, 2400);
@@ -2136,7 +2136,7 @@
         hat(t + 0.31, 0.045);
       }
       // the EP quotes the theme head, swung and lazy
-      [[6, 'A4'], [6.31, 'C5'], [6.5, 'E5'], [7, 'D5'], [7.31, 'C5'], [7.5, 'D5']].forEach(([t, n]) => ep(t, n, 0.16, { dec: 0.9, delay: 0.12 }));
+      [[6, 'A4'], [6.31, 'C5'], [6.5, 'E5'], [7, 'D5'], [7.31, 'C5'], [7.5, 'D5']].forEach(([t, n]) => ep(t, n, 0.26, { dec: 0.9, delay: 0.12 }));
       whoosh(5, 0.5, 0.55, { f0: 500, fp: 3200, f1: 700, pan: [-0.9, 0.4] });
       // 7.0 PING
       ting(7, hz('B6'), 0.6, { dec: 0.9 });
@@ -2260,16 +2260,16 @@
         sub(a, b - 0.05, root, 0.3);
         for (let t = a; t < b - 1e-6; t += 0.25) {
           const k = Math.round((t - 26) / 0.25) % 4;
-          if (k === 0) strum(t, notes, 0.34);
+          if (k === 0) strum(t, notes, 0.46);
           else if (k === 2) {
             golpe(t, 1);
-            strum(t, notes.slice(-3), 0.12, { stop: 0.07, lp: 2200 });
-          } else strum(t, notes.slice(-3), 0.16, { up: true, len: 0.5 });
+            strum(t, notes.slice(-3), 0.16, { stop: 0.07, lp: 2200 });
+          } else strum(t, notes.slice(-3), 0.22, { up: true, len: 0.5 });
           // cajon: bass on 1, slap on the backbeat; palmas on the backbeat and the last 8th
           if (k === 0) cajon(t, 0.55, false);
           if (k === 2) {
             cajon(t, 0.45, true);
-            clap(t, 0.32, { pan: -0.3 });
+            clap(t, 0.26, { pan: -0.3 });
           }
           if (k === 3) clap(t, 0.2, { pan: 0.35 });
           if (k === 1 && Math.round(t * 4) % 8 === 5) cajon(t, 0.3, false);
@@ -2277,10 +2277,10 @@
       }
       // the theme on nylon guitar, harmonic minor, doubled softly by the FM lead
       const m = motif(26, 'A4', 'harm', 0.25);
-      m.forEach(([t, f]) => ks(t, f, 0.55, { bright: 0.62, t60: 1.2, len: 1.2, lp: 5000, pan: 0.1, room: 0.2, delay: 0.08 }));
+      m.forEach(([t, f]) => ks(t, f, 0.8, { bright: 0.62, t60: 1.2, len: 1.2, lp: 5000, pan: 0.1, room: 0.2, delay: 0.08 }));
       lead(m.map(([t, f]) => [t, f, 0.03]), 29.9, 0.08, { delay: 0.1 });
       // the answer: a descending flamenco run into the E sting
-      [[30, 'A5'], [30.25, 'G5'], [30.5, 'F5'], [30.75, 'E5'], [31, 'D5'], [31.25, 'C5']].forEach(([t, n]) => ks(t, n, 0.5, { bright: 0.62, t60: 1, len: 0.9, lp: 5000, pan: 0.1, delay: 0.08 }));
+      [[30, 'A5'], [30.25, 'G5'], [30.5, 'F5'], [30.75, 'E5'], [31, 'D5'], [31.25, 'C5']].forEach(([t, n]) => ks(t, n, 0.75, { bright: 0.62, t60: 1, len: 0.9, lp: 5000, pan: 0.1, delay: 0.08 }));
       // 27.5 pose sparkle; 30.5 the aroma ribbon
       sparkle(27.5, 0.9);
       ['A5', 'C6', 'E6', 'A6'].forEach((n, i) => glass(30.5 + i * 0.09, hz(n), 0.06, { dec: 1.2 }));
@@ -2480,7 +2480,7 @@
       wind(71, 75, [[0, 0], [0.5, 0.04], [3.8, 0.04], [4, 0]]);
       for (const t of [71.6, 71.68, 72.9, 73.7, 73.78, 74.4]) glide(t, 3200 + R('bird', t) * 900, 4300, 0.05, 0.04, { bus: 'amb', hall: 0.2, pan: 0.5 });
       for (let t = 71; t < 75; t += 0.25) shaker(t, t % 0.5 ? 0.03 : 0.05, 0.3);
-      whistleLine([[71.25, 'B5', 0.5], [71.75, 'D6', 0.25], [72, 'G6', 0.75], [72.75, 'E6', 0.25], [73, 'C6', 0.5], [73.5, 'E6', 0.5], [74, 'D6', 0.25], [74.25, 'C6', 0.25], [74.5, 'A5', 0.45]], 74.95, 0.15);
+      whistleLine([[71.25, 'B5', 0.5], [71.75, 'D6', 0.25], [72, 'G6', 0.75], [72.75, 'E6', 0.25], [73, 'C6', 0.5], [73.5, 'E6', 0.5], [74, 'D6', 0.25], [74.25, 'C6', 0.25], [74.5, 'A5', 0.45]], 74.95, 0.19);
     }
 
     // ============================================================ 75-79 GOOFY SENSES: the music stops
@@ -2547,7 +2547,7 @@
     // ============================================================ 89-95 I MISS HAYK: sad epic strings + howl (D minor)
     if (on(89, 95)) {
       for (const [a, b, r, ns] of [[89, 91, 'D2', ['D3', 'A3', 'D4', 'F4']], [91, 92, 'Bb1', ['Bb2', 'F3', 'Bb3', 'D4']], [92, 93, 'G1', ['G2', 'D3', 'G3', 'Bb3']], [93, 94, 'F1', ['F2', 'C3', 'F3', 'A3']], [94, 95, 'D2', ['D3', 'A3', 'D4', 'F4']]]) {
-        pad(a, b, ns, 0.24, { att: 0.25, rel: 0.4, cut0: 1200, cut1: 2600, detune: 12, hall: 0.4 });
+        pad(a, b, ns, 0.2, { att: 0.25, rel: 0.4, cut0: 1200, cut1: 2600, detune: 12, hall: 0.4 });
         sub(a, b, r, 0.35, { att: 0.1, rel: 0.3 });
       }
       // the theme on strings, slowed to quarters, the celli an octave down
@@ -2556,10 +2556,10 @@
       bowed(ph.map(([t, n]) => [t, hz(n) / 2]), 94.85, 0.18, { att: 0.08 });
       taiko(89, 0.8, 50, { hall: 0.4 });
       ks(89, 'D4', 0.35, harp);
-      howl(89, 0.9, [[0, 380], [0.5, 620, 'exp'], [0.9, 560, 'exp']], 0.3);
+      howl(89, 0.9, [[0, 380], [0.5, 620, 'exp'], [0.9, 560, 'exp']], 0.4);
       // 90 the big howl, with a bark attack
       bark(90, 0.5, { big: true, f: 520 });
-      howl(90, 3.0, [[0, 360], [0.6, 880, 'exp'], [1.8, 860, 'exp'], [2.4, 600, 'exp'], [3, 340, 'exp']], 0.5, { cave: 0.3 });
+      howl(90, 3.0, [[0, 360], [0.6, 880, 'exp'], [1.8, 860, 'exp'], [2.4, 600, 'exp'], [3, 340, 'exp']], 0.72, { cave: 0.3 });
       impact(90, 0.85, { dec: 2.5 });
       taiko(91, 0.45, 55, { hall: 0.3 });
       taiko(92, 0.5, 55, { hall: 0.3 });

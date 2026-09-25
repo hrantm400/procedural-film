@@ -301,8 +301,8 @@
 
   // WOOF placement per bark (alternating left / right, tilted), size escalates.
   const WOOFS = [
-    [330, 330, -0.2], [745, 450, 0.16], [320, 360, -0.14], [750, 420, 0.2], [335, 320, -0.22],
-    [540, 380, -0.08], [325, 350, -0.16], [745, 460, 0.14], [330, 320, -0.2], [745, 430, 0.18],
+    [360, 330, -0.2], [715, 450, 0.16], [355, 360, -0.14], [720, 420, 0.2], [365, 320, -0.22],
+    [540, 380, -0.08], [355, 350, -0.16], [715, 460, 0.14], [360, 320, -0.2], [715, 430, 0.18],
   ];
   // Grant, the flag: feet trail off the left edge, hands up at the leash end
   const GRANT = { x: -40, y: 930, s: 0.98, tilt: -0.22 };
@@ -347,7 +347,7 @@
         F.leash(ctx, ga.collar, gr.handR, { taut: true, color: sil, width: 10 });
         F.shockRing(ctx, ga.mouth[0], ga.mouth[1], 0.12, { r: 420, color: inv ? '#fff' : '#000', life: 0.3, width: 30 });
         ctx.restore();
-        F.sfx(ctx, 'WOOF!!', 540, 420, t, IMPACT, { size: 200, fill: inv ? '#0a0a10' : '#ffffff', stroke: inv ? '#ffffff' : '#0a0a10', shadowColor: inv ? '#ffffff' : '#0a0a10', rot: -0.1, shake: 12 });
+        F.sfx(ctx, 'WOOF!!', 540, 420, t, IMPACT, { size: Math.min(200, 800 / (F.measure(ctx, 'WOOF!!', 100) / 100)), fill: inv ? '#0a0a10' : '#ffffff', stroke: inv ? '#ffffff' : '#0a0a10', shadowColor: inv ? '#ffffff' : '#0a0a10', rot: -0.1, shake: 12 });
         return;
       }
 
@@ -414,8 +414,8 @@
       F.menace(ctx, gx - 330, gy - 150, t, { size: 72, n: 3, seed: 1909, color: '#7a3cff' });
 
       // ---- 7 shock rings from the mouth (two per bark), leaves, front speed lines
-      F.shockRing(ctx, ga.mouth[0] + 110, ga.mouth[1] - 20, age, { r: 380, color: '#ffffff', life: 0.42, width: 26, squash: 0.75 });
-      F.shockRing(ctx, ga.mouth[0] + 110, ga.mouth[1] - 20, age - 0.08, { r: 280, color: P.sfxYellow, life: 0.36, width: 16, squash: 0.75 });
+      F.shockRing(ctx, ga.mouth[0] + 190, ga.mouth[1] - 30, age, { r: 380, color: '#ffffff', life: 0.42, width: 26, squash: 0.75 });
+      F.shockRing(ctx, ga.mouth[0] + 190, ga.mouth[1] - 30, age - 0.08, { r: 280, color: P.sfxYellow, life: 0.36, width: 16, squash: 0.75 });
       // bark breath lines out of the mouth
       if (age < 0.25) {
         ctx.save();
@@ -444,7 +444,8 @@
         const [x, y, rot] = WOOFS[i];
         const big = i === 5;
         const red = i % 2 === 0;
-        const size = big ? 200 : 150 + i * 4;
+        // escalating size, capped so every WOOF stays inside the safe width
+        const size = Math.min(big ? 200 : 150 + i * 4, (big ? 720 : 530) / (F.measure(ctx, 'WOOF!', 100) / 100));
         const fade = clamp((t0 + 0.95 - t) / 0.25);
         const older = t - t0 > BEAT - 1e-6; // an older WOOF shrinks back while the new one hits
         ctx.save();

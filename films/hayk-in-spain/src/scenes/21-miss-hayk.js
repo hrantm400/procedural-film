@@ -687,8 +687,9 @@
         const age = t - t0;
         const a = last ? clamp(age / 0.15) : clamp(age / 0.12) * (1 - clamp((age - 0.22) / 0.18));
         if (a <= 0) return;
+        const fit = Math.min(size, 880 / (F.measure(ctx, 'I MISS HAAAAYK!!', 100) / 100));
         F.text(ctx, 'I MISS HAAAAYK!!', 540 + (h01('ex', i, LIB.boil(info.T)) - 0.5) * 6, y - age * 30 * (last ? 0 : 1), {
-          size, fill: '#ffe14a', stroke: P.line, lw: size * 0.18, alpha: a * (last ? 1 : 0.9), scale: F.popIn(t, t0), shadow: size * 0.07, shadowColor: '#b3122b',
+          size: fit, fill: '#ffe14a', stroke: P.line, lw: fit * 0.18, alpha: a * (last ? 1 : 0.9), scale: F.popIn(t, t0), shadow: fit * 0.07, shadowColor: '#b3122b',
         });
       });
       F.vignette(ctx, 0.25, '20,30,80');
