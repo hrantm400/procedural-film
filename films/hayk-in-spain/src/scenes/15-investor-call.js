@@ -1,23 +1,14 @@
-// STUB
-// Placeholder for shot 15 'investor-call' (illustrated). The scene agent replaces this whole file.
-FILM.scene({
-  id: 'investor-call',
-  draw(ctx, t, info) {
-    const L = info.lib, P = L.pal;
-    const p = L.clamp(t / info.dur);
-    const q = L.clamp(L.onTwos(t) / info.dur);
-    const seed = L.hash('investor-call');
-    L.paper(ctx);
-    const W = FILM.W, H = FILM.H, cx = W / 2;
-    // captions sit above the safe bottom the gate enforces: a vertical frame keeps clear of the
-    // Shorts UI, a square frame needs only a margin
-    const safeBottom = H >= W * 1.5 ? H - 380 : H - 80;
-    L.inkPath(ctx, L.ellipsePts(cx, H * 0.45, W * 0.28, H * 0.21, 72), { closed: true, width: 5, seed: seed + 1, double: true });
-    L.inkLine(ctx, W * 0.13, H * 0.68, W * 0.87, H * 0.68, { width: 3, seed: seed + 2 });
-    L.inkCircle(ctx, W * 0.22 + W * 0.56 * q, H * 0.64, 44, { width: 3, seed: seed + 3, fill: P.orange });
-    L.text(ctx, 'STUB 15', cx, H * 0.17, { size: 60, weight: 600, align: 'center', color: P.annMagenta });
-    L.text(ctx, info.shot.title || 'investor-call', cx, safeBottom - 120, { size: 44, align: 'center', color: P.ink });
-    L.text(ctx, 'investor-call', cx, safeBottom - 70, { size: 30, align: 'center', color: P.inkSoft });
-    if (p > 0.01) L.inkLine(ctx, W * 0.13, safeBottom - 20, W * 0.13 + W * 0.74 * p, safeBottom - 20, { width: 4, color: P.annBlue, seed: seed + 4, taper: 0 });
-  },
-});
+(function () {
+  'use strict';
+  FILM.scene({
+    id: 'investor-call',
+    draw(ctx, t, info) {
+      const F = FILM.fx;
+      F.sky(ctx, '#ccc', '#eee');
+      FILM.cast.hayk(ctx, { x: 300, y: 900, s: 1.3, pose: 'thumbsUp', t, face: 'chewing', belly: 1 });
+      FILM.cast.hayk(ctx, { x: 800, y: 900, s: 1.3, pose: 'give', t, face: 'happy', chewing: true, belly: 0.8, hold: 'burger' });
+      FILM.cast.hayk(ctx, { x: 300, y: 1800, s: 1.3, pose: 'point', t, face: 'smug', belly: 0.8, shades: true });
+      FILM.cast.hayk(ctx, { x: 800, y: 1800, s: 1.3, pose: 'stand', t, face: 'happy', chewing: true, belly: 0.4, hold: 'burger', holdL: 'drink' });
+    },
+  });
+})();
