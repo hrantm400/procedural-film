@@ -29,6 +29,14 @@
   // offscreen canvases match the main canvas backing (CPU when the frame is read back, as in the
   // tools), otherwise every drawImage of a cached layer costs a GPU readback
   let WRF = false;
+  // full-frame cached layers are drawn with nearest-neighbour sampling: under a camera push a
+  // bilinear resample of 2 M pixels costs ~50 ms on a CPU-backed canvas; flat cel art hides the difference
+  function drawLayer(ctx, img, x, y, w, h) {
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, x, y, w, h);
+    ctx.restore();
+  }
   const wrfOf = (ctx) => !!(ctx.getContextAttributes && ctx.getContextAttributes().willReadFrequently);
   const h = (...k) => F.h01(ID, ...k);
 
@@ -276,9 +284,9 @@
       ctx.translate(-W / 2, -1100);
 
       // 1-2. background
-      ctx.drawImage(L.cached(ID + '-sky-' + (FILM.S || 1) + (WRF ? 'r' : 'g'), buildSky), 0, 0, W, H);
+      drawLayer(ctx, L.cached(ID + '-sky-' + (FILM.S || 1) + (WRF ? 'r' : 'g'), buildSky), 0, 0, W, H);
       F.clouds(ctx, { n: 4, seed: 44, t, y: 380, h: 300, speed: 14, scale: 0.8 });
-      ctx.drawImage(L.cached(ID + '-bg-' + (FILM.S || 1) + (WRF ? 'r' : 'g'), buildBg), 0, 0, W, H);
+      drawLayer(ctx, L.cached(ID + '-bg-' + (FILM.S || 1) + (WRF ? 'r' : 'g'), buildBg), 0, 0, W, H);
 
       // 3. golden light column + god rays onto Hayk
       ctx.save();

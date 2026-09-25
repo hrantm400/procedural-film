@@ -37,12 +37,13 @@
   const B_TALK = 3.0; // T 92.0
   const B_ZOOM = 4.0; // T 93.0
   const ZOOM_DUR = 1.6; // globe settles at t 5.6 and holds
-  const ECHOES = [[4.3, 88, 560], [4.85, 62, 500], [5.4, 44, 420]]; // [t0, size, y]
+  const ECHOES = [[4.25, 88, 640], [4.8, 62, 520], [5.35, 44, 420]]; // [t0, size, y]
 
   // ---- L0 geometry
   const GROUND = 1540;
   const GOOFY = { x: 690, y: 1545, s: 2.45 };
   const GRANT = { x: 250, y: 1470, s: 1.12 };
+  const HIP_END = [330, 1225]; // Grant's hip after the fall (head on the ground, legs up)
   const A = [720, 1000]; // screen anchor of the zoom (near Goofy's head)
   const F1 = [560, 1150]; // where the park sits inside the Yerevan view
   const F2 = A; // Armenia on the globe at the end (L2 is at scale 1 when the zoom ends)
@@ -198,11 +199,12 @@
       return CAST.grant(ctx, { x, y: y + jump, s, pose: 'kneel', face, t, silhouette: o.sil });
     }
     // rotate around the hip; the hip also drops to the ground
-    const ang = -2.05 * LIB.ease.outBack(u);
+    const ang = -2.5 * LIB.ease.outBack(u);
     const pivot = [x, y - 250 * s];
-    const drop = LIB.ease.outBounce(u) * 150 * s;
+    const dx = LIB.ease.outCubic(u) * (HIP_END[0] - pivot[0]);
+    const drop = LIB.ease.outBounce(u) * (HIP_END[1] - pivot[1]);
     ctx.save();
-    ctx.translate(pivot[0] + LIB.ease.outCubic(u) * 110, pivot[1] + drop);
+    ctx.translate(pivot[0] + dx, pivot[1] + drop);
     ctx.rotate(ang);
     ctx.translate(-pivot[0], -pivot[1]);
     const a = CAST.grant(ctx, { x, y, s, pose: 'cheer', face, t, silhouette: o.sil });
@@ -210,8 +212,8 @@
     // anchors come back in the unrotated frame: map the ones we use
     const c = Math.cos(ang), sn = Math.sin(ang);
     const map = (p) => {
-      const dx = p[0] - pivot[0], dy = p[1] - pivot[1];
-      return [pivot[0] + LIB.ease.outCubic(u) * 110 + dx * c - dy * sn, pivot[1] + drop + dx * sn + dy * c];
+      const qx = p[0] - pivot[0], qy = p[1] - pivot[1];
+      return [pivot[0] + dx + qx * c - qy * sn, pivot[1] + drop + qx * sn + qy * c];
     };
     return { head: map(a.head), mouth: map(a.mouth), top: map(a.top), hip: map(a.hip) };
   }
@@ -238,13 +240,14 @@
       F.fo(ctx, fill, lw, line);
     };
     // tail: a jagged wedge down to Goofy's mouth
-    const tx = mouth[0], ty = mouth[1] - 30;
+    // (from the bubble's lower right, so it never crosses his eyes)
+    const tx = mouth[0] + 20, ty = mouth[1] - 50;
     ctx.beginPath();
-    ctx.moveTo(cx + 120, cy + 180); ctx.lineTo(tx, ty); ctx.lineTo(cx + 280, cy + 150); ctx.closePath();
+    ctx.moveTo(cx + 300, cy + 170); ctx.lineTo(tx, ty); ctx.lineTo(cx + 420, cy + 100); ctx.closePath();
     F.fo(ctx, P.sfxRed, 9);
     spikes(470, 250, 26, 0.2, 1, P.sfxRed, 9);
     ctx.beginPath();
-    ctx.moveTo(cx + 150, cy + 150); ctx.lineTo(tx - 12, ty - 30); ctx.lineTo(cx + 250, cy + 130); ctx.closePath();
+    ctx.moveTo(cx + 320, cy + 140); ctx.lineTo(tx - 4, ty - 36); ctx.lineTo(cx + 395, cy + 95); ctx.closePath();
     F.fo(ctx, '#ffffff', 0);
     spikes(430, 222, 24, 0.14, 2, '#ffffff', 7);
     // text
@@ -311,11 +314,11 @@
 
     // ---- text
     if (t >= B_FALL && t < B_FALL + 0.9) {
-      F.sfx(ctx, 'THUD!', 220, 1280, t, B_FALL + 0.12, { size: 92, fill: '#ffffff', shadowColor: '#27335c', rot: -0.15, life: 0.75 });
+      F.sfx(ctx, 'THUD!', 330, 1330, t, B_FALL + 0.12, { size: 92, fill: '#ffffff', shadowColor: '#27335c', rot: -0.15, life: 0.75 });
     }
     howlBubble(ctx, t, ga.mouth);
     if (t >= B_TALK) {
-      F.bubble(ctx, 'HE CAN TALK?!', 330, 1060, { size: 50, tail: [gr.head[0] + 40, gr.head[1] - 60], t, t0: B_TALK, shake: 5 });
+      F.bubble(ctx, 'HE CAN TALK?!', 290, 880, { size: 50, tail: [150, 1120], t, t0: B_TALK, shake: 5 });
       F.sweat(ctx, gr.head[0] + 70, gr.head[1] - 120, 0.9);
     }
     return ga;
@@ -646,7 +649,7 @@
         if (t < t0 - 1e-6) return;
         const last = i === ECHOES.length - 1;
         const age = t - t0;
-        const a = last ? clamp(age / 0.15) : clamp(age / 0.12) * (1 - clamp((age - 0.45) / 0.3));
+        const a = last ? clamp(age / 0.15) : clamp(age / 0.12) * (1 - clamp((age - 0.3) / 0.22));
         if (a <= 0) return;
         F.text(ctx, 'I MISS HAAAAYK!!', 540 + (h01('ex', i, LIB.boil(info.T)) - 0.5) * 6, y - age * 30 * (last ? 0 : 1), {
           size, fill: '#ffe14a', stroke: P.line, lw: size * 0.18, alpha: a * (last ? 1 : 0.9), scale: F.popIn(t, t0), shadow: size * 0.07, shadowColor: '#b3122b',

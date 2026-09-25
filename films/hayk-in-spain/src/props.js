@@ -126,12 +126,14 @@
     ctx.fillRect(x, y, w, h);
   }
 
-  /** sunburst(ctx, cx, cy, o{ rays, colorA, colorB, rot, r }): alternating wedge rays (anime backdrop). */
+  /** sunburst(ctx, cx, cy, o{ rays, colorA, colorB, rot, r }): alternating wedge rays (anime backdrop). colorA: null skips the full-frame base fill. */
   function sunburst(ctx, cx, cy, o = {}) {
     const n = o.rays || 24, r = o.r || 2600, rot = o.rot || 0;
     ctx.save();
-    ctx.fillStyle = o.colorA || '#ffd35a';
-    ctx.fillRect(-50, -50, FILM.W + 100, FILM.H + 100);
+    if (o.colorA !== null) {
+      ctx.fillStyle = o.colorA || '#ffd35a';
+      ctx.fillRect(-50, -50, FILM.W + 100, FILM.H + 100);
+    }
     ctx.fillStyle = o.colorB || '#ffb13a';
     ctx.beginPath();
     for (let i = 0; i < n; i++) {

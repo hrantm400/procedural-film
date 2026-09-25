@@ -33,6 +33,14 @@
   // offscreen canvases match the main canvas backing (CPU when the frame is read back, as in the
   // tools), otherwise every drawImage of a cached layer costs a GPU readback
   let WRF = false;
+  // full-frame cached layers are drawn with nearest-neighbour sampling: under a camera push a
+  // bilinear resample of 2 M pixels costs ~50 ms on a CPU-backed canvas; flat cel art hides the difference
+  function drawLayer(ctx, img, x, y, w, h) {
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, x, y, w, h);
+    ctx.restore();
+  }
   const wrfOf = (ctx) => !!(ctx.getContextAttributes && ctx.getContextAttributes().willReadFrequently);
   const h = (...k) => F.h01(ID, ...k);
 
@@ -235,7 +243,7 @@
       ctx.translate(-W / 2, -1100);
 
       // 1. cosmos
-      ctx.drawImage(L.cached(ID + '-cosmos-' + (FILM.S || 1) + (WRF ? 'r' : 'g'), buildCosmos), -60, -60, W + 120, H + 120);
+      drawLayer(ctx, L.cached(ID + '-cosmos-' + (FILM.S || 1) + (WRF ? 'r' : 'g'), buildCosmos), -60, -60, W + 120, H + 120);
       // 2. animated sky
       nebulaArms(ctx, t);
       F.stars(ctx, { n: 90, seed: 49, x: 0, y: 0, w: W, h: H });

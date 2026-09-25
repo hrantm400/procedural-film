@@ -33,6 +33,14 @@
   // offscreen canvases match the main canvas backing (CPU when the frame is read back, as in the
   // tools), otherwise every drawImage of a cached layer costs a GPU readback
   let WRF = false;
+  // full-frame cached layers are drawn with nearest-neighbour sampling: under a camera push a
+  // bilinear resample of 2 M pixels costs ~50 ms on a CPU-backed canvas; flat cel art hides the difference
+  function drawLayer(ctx, img, x, y, w, h) {
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, x, y, w, h);
+    ctx.restore();
+  }
   const wrfOf = (ctx) => !!(ctx.getContextAttributes && ctx.getContextAttributes().willReadFrequently);
 
   // beat constants (local t)
@@ -371,7 +379,7 @@
       if (!impactNow) {
         // 1. background
         const bg = L.cached(ID + '-bg-' + (FILM.S || 1) + (WRF ? 'r' : 'g'), buildBg);
-        if (!window.__skip.bg) ctx.drawImage(bg, 0, 0, W, H);
+        drawLayer(ctx, bg, 0, 0, W, H);
         // 2. animated background: lamp glows + sign twinkles
         [150, 930].forEach((lx, i) => {
           const gg = ctx.createRadialGradient(lx, 260, 10, lx, 260, 170);
@@ -382,9 +390,9 @@
           ctx.fillRect(lx - 170, 90, 340, 340);
         });
         [150, 930].forEach((lx) => lamp(ctx, lx, 180));
-        if (!window.__skip.spark) F.sparkles(ctx, { x: 220, y: 300, w: 680, h: 300, n: 7, seed: 31, t, size: 30 });
+        F.sparkles(ctx, { x: 220, y: 300, w: 680, h: 300, n: 7, seed: 31, t, size: 30 });
 
-        if (window.__skip.focus) {} else if (t < T_CHOMP) {
+        if (t < T_CHOMP) {
           // anticipation: dark focus lines tighten
           F.focusLines(ctx, HX, 1010, { inner: 460 - 80 * windUp, count: 90, color: P.line, alpha: 0.12 + 0.3 * windUp, seed: 5, width: 12 });
         } else if (!second) {
@@ -432,7 +440,7 @@
       ctx.translate(HX, HY);
       ctx.scale(sx, sy);
       ctx.translate(-HX, -HY);
-      const a = window.__skip.hayk ? { handL: [300, 1100], handR: [800, 1100], mouth: [540, 1000], eyeL: [500, 900], eyeR: [580, 900], head: [540, 900], top: [540, 700], chest: [540, 1200] } : FILM.cast.hayk(ctx, {
+      const a = FILM.cast.hayk(ctx, {
         x: HX, y: HY + bob, s: HS, t, pose, face, mouth, belly: 0.2, crown: true, tilt: lean,
         silhouette: impactNow ? '#0a0a10' : null,
       });
@@ -457,7 +465,7 @@
           jawTeeth(ctx, jx, jy, 1.6, op, false);
           silEyes(ctx, a);
         } else {
-          if (!window.__skip.burger) megaBurger(ctx, bx, by, level, info, t < T_CHOMP ? 0.6 + 0.4 * Math.sin(t * 8) : 0);
+          megaBurger(ctx, bx, by, level, info, t < T_CHOMP ? 0.6 + 0.4 * Math.sin(t * 8) : 0);
           fingers(ctx, a.handL[0] - 10, gripY + 10 + lift, 1.1, 1);
           fingers(ctx, a.handR[0] + 10, gripY + 10 + lift, 1.1, -1);
         }
@@ -474,7 +482,7 @@
           F.sparkle(ctx, a.eyeR[0] + 20, a.eyeR[1] - 20, 20 + 6 * Math.sin(t * 9 + 1));
         }
         // 5. table + tray (foreground)
-        if (!window.__skip.table) drawTable(ctx, t, second);
+        drawTable(ctx, t, second);
       } else {
         ctx.fillStyle = '#0a0a10';
         ctx.fillRect(-60, TABLE_Y, W + 120, H - TABLE_Y + 60);
