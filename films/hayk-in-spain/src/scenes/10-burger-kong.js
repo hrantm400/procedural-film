@@ -30,6 +30,10 @@
   const lerp = (a, b, u) => a + (b - a) * u;
   const W = 1080, H = 1920;
   const FR = 1 / 24;
+  // offscreen canvases match the main canvas backing (CPU when the frame is read back, as in the
+  // tools), otherwise every drawImage of a cached layer costs a GPU readback
+  let WRF = false;
+  const wrfOf = (ctx) => !!(ctx.getContextAttributes && ctx.getContextAttributes().willReadFrequently);
 
   // beat constants (local t)
   const T_WIND = 0.6; // T 39.6
@@ -157,7 +161,7 @@
   function buildBg() {
     const S = FILM.S || 1;
     const c = FILM.makeCanvas(Math.round(W * S), Math.round(H * S));
-    const g = c.getContext('2d');
+    const g = c.getContext('2d', { willReadFrequently: WRF });
     g.setTransform(S, 0, 0, S, 0, 0);
     // wall
     F.sky(g, '#ffe2b8', '#f6b872', { mid: '#ffd49a', midAt: 0.45 });
@@ -245,8 +249,8 @@
   function megaBurger(ctx, x, y, level, info, glow, sil) {
     if (level >= 3) return;
     const S = info.S || FILM.S || 1;
-    const c = FILM.lib.cached(ID + '-mb-' + S, () => FILM.makeCanvas(Math.round(MB_W * S), Math.round(MB_H * S)));
-    const g = c.getContext('2d');
+    const c = FILM.lib.cached(ID + '-mb-' + S + (WRF ? 'r' : 'g'), () => FILM.makeCanvas(Math.round(MB_W * S), Math.round(MB_H * S)));
+    const g = c.getContext('2d', { willReadFrequently: WRF });
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.globalCompositeOperation = 'source-over';
     g.globalAlpha = 1;
@@ -343,6 +347,7 @@
     draw(ctx, tIn, info) {
       const L = info.lib;
       const t = clamp(tIn, 0, info.dur);
+      WRF = wrfOf(ctx);
       const tw = L.onTwos(t);
       const hitFrames = (a, n) => t >= a - 1e-6 && t < a + n * FR - 1e-6;
 
@@ -365,8 +370,8 @@
 
       if (!impactNow) {
         // 1. background
-        const bg = L.cached(ID + '-bg-' + (FILM.S || 1), buildBg);
-        ctx.drawImage(bg, 0, 0, W, H);
+        const bg = L.cached(ID + '-bg-' + (FILM.S || 1) + (WRF ? 'r' : 'g'), buildBg);
+        if (!window.__skip.bg) ctx.drawImage(bg, 0, 0, W, H);
         // 2. animated background: lamp glows + sign twinkles
         [150, 930].forEach((lx, i) => {
           const gg = ctx.createRadialGradient(lx, 260, 10, lx, 260, 170);
@@ -377,9 +382,9 @@
           ctx.fillRect(lx - 170, 90, 340, 340);
         });
         [150, 930].forEach((lx) => lamp(ctx, lx, 180));
-        F.sparkles(ctx, { x: 220, y: 300, w: 680, h: 300, n: 7, seed: 31, t, size: 30 });
+        if (!window.__skip.spark) F.sparkles(ctx, { x: 220, y: 300, w: 680, h: 300, n: 7, seed: 31, t, size: 30 });
 
-        if (t < T_CHOMP) {
+        if (window.__skip.focus) {} else if (t < T_CHOMP) {
           // anticipation: dark focus lines tighten
           F.focusLines(ctx, HX, 1010, { inner: 460 - 80 * windUp, count: 90, color: P.line, alpha: 0.12 + 0.3 * windUp, seed: 5, width: 12 });
         } else if (!second) {
@@ -427,7 +432,7 @@
       ctx.translate(HX, HY);
       ctx.scale(sx, sy);
       ctx.translate(-HX, -HY);
-      const a = FILM.cast.hayk(ctx, {
+      const a = window.__skip.hayk ? { handL: [300, 1100], handR: [800, 1100], mouth: [540, 1000], eyeL: [500, 900], eyeR: [580, 900], head: [540, 900], top: [540, 700], chest: [540, 1200] } : FILM.cast.hayk(ctx, {
         x: HX, y: HY + bob, s: HS, t, pose, face, mouth, belly: 0.2, crown: true, tilt: lean,
         silhouette: impactNow ? '#0a0a10' : null,
       });
@@ -452,7 +457,7 @@
           jawTeeth(ctx, jx, jy, 1.6, op, false);
           silEyes(ctx, a);
         } else {
-          megaBurger(ctx, bx, by, level, info, t < T_CHOMP ? 0.6 + 0.4 * Math.sin(t * 8) : 0);
+          if (!window.__skip.burger) megaBurger(ctx, bx, by, level, info, t < T_CHOMP ? 0.6 + 0.4 * Math.sin(t * 8) : 0);
           fingers(ctx, a.handL[0] - 10, gripY + 10 + lift, 1.1, 1);
           fingers(ctx, a.handR[0] + 10, gripY + 10 + lift, 1.1, -1);
         }
@@ -469,7 +474,7 @@
           F.sparkle(ctx, a.eyeR[0] + 20, a.eyeR[1] - 20, 20 + 6 * Math.sin(t * 9 + 1));
         }
         // 5. table + tray (foreground)
-        drawTable(ctx, t, second);
+        if (!window.__skip.table) drawTable(ctx, t, second);
       } else {
         ctx.fillStyle = '#0a0a10';
         ctx.fillRect(-60, TABLE_Y, W + 120, H - TABLE_Y + 60);

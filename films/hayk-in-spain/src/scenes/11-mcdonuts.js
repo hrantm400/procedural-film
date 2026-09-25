@@ -26,6 +26,10 @@
   const lerp = (a, b, u) => a + (b - a) * u;
   const W = 1080, H = 1920;
   const FR = 1 / 24;
+  // offscreen canvases match the main canvas backing (CPU when the frame is read back, as in the
+  // tools), otherwise every drawImage of a cached layer costs a GPU readback
+  let WRF = false;
+  const wrfOf = (ctx) => !!(ctx.getContextAttributes && ctx.getContextAttributes().willReadFrequently);
   const h = (...k) => F.h01(ID, ...k);
 
   const T_NOM = [0.5, 1.0, 1.5]; // T 44.5, 45.0, 45.5
@@ -92,7 +96,7 @@
       gg.arc(x + r * 0.98, y - r * 0.18, r * 0.24, 0, TAU);
     };
     const c = FILM.makeCanvas(Math.ceil(r * 3 * (FILM.S || 1)), Math.ceil(r * 3 * (FILM.S || 1)));
-    const d = c.getContext('2d');
+    const d = c.getContext('2d', { willReadFrequently: WRF });
     const S = FILM.S || 1;
     d.setTransform(S, 0, 0, S, (r * 1.5 - x) * S, (r * 1.5 - y) * S);
     d.beginPath(); d.arc(x, y, r, 0, TAU); d.arc(x, y, r * 0.38, 0, TAU, true);
@@ -126,7 +130,7 @@
   function buildSky() {
     const S = FILM.S || 1;
     const c = FILM.makeCanvas(Math.round(W * S), Math.round(H * S));
-    const g = c.getContext('2d');
+    const g = c.getContext('2d', { willReadFrequently: WRF });
     g.setTransform(S, 0, 0, S, 0, 0);
     F.sky(g, P.spainSky, '#d4efff', { h: 1300, mid: '#8fd0ff', midAt: 0.5 });
     g.fillStyle = '#d4efff'; g.fillRect(0, 1300, W, 620);
@@ -138,7 +142,7 @@
   function buildBg() {
     const S = FILM.S || 1;
     const c = FILM.makeCanvas(Math.round(W * S), Math.round(H * S));
-    const g = c.getContext('2d');
+    const g = c.getContext('2d', { willReadFrequently: WRF });
     g.setTransform(S, 0, 0, S, 0, 0);
     // far town, soft (no outlines)
     townBlock(g, -20, 900, 170, 560, '#f3dcb4', '#e89a78', 1);
@@ -259,6 +263,7 @@
     draw(ctx, tIn, info) {
       const L = info.lib;
       const t = clamp(tIn, 0, info.dur);
+      WRF = wrfOf(ctx);
       const tw = L.onTwos(t);
       const hitFrames = (a, n) => t >= a - 1e-6 && t < a + n * FR - 1e-6;
       const trayMode = t >= T_TRAY;
@@ -271,9 +276,9 @@
       ctx.translate(-W / 2, -1100);
 
       // 1-2. background
-      ctx.drawImage(L.cached(ID + '-sky-' + (FILM.S || 1), buildSky), 0, 0, W, H);
+      ctx.drawImage(L.cached(ID + '-sky-' + (FILM.S || 1) + (WRF ? 'r' : 'g'), buildSky), 0, 0, W, H);
       F.clouds(ctx, { n: 4, seed: 44, t, y: 380, h: 300, speed: 14, scale: 0.8 });
-      ctx.drawImage(L.cached(ID + '-bg-' + (FILM.S || 1), buildBg), 0, 0, W, H);
+      ctx.drawImage(L.cached(ID + '-bg-' + (FILM.S || 1) + (WRF ? 'r' : 'g'), buildBg), 0, 0, W, H);
 
       // 3. golden light column + god rays onto Hayk
       ctx.save();

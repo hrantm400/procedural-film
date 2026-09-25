@@ -30,6 +30,10 @@
   const lerp = (a, b, u) => a + (b - a) * u;
   const W = 1080, H = 1920;
   const FR = 1 / 24;
+  // offscreen canvases match the main canvas backing (CPU when the frame is read back, as in the
+  // tools), otherwise every drawImage of a cached layer costs a GPU readback
+  let WRF = false;
+  const wrfOf = (ctx) => !!(ctx.getContextAttributes && ctx.getContextAttributes().willReadFrequently);
   const h = (...k) => F.h01(ID, ...k);
 
   const T_TEXT = 1.0; // T 50.0
@@ -44,10 +48,10 @@
   // ---------------------------------------------------------------------------
   function buildCosmos() {
     const S = FILM.S || 1;
-    const c = FILM.makeCanvas(Math.round(W * S), Math.round(H * S));
-    const g = c.getContext('2d');
-    g.setTransform(S, 0, 0, S, 0, 0);
-    F.sky(g, PURPLE_D, '#2a0f4a', { mid: PURPLE, midAt: 0.5 });
+    const c = FILM.makeCanvas(Math.round((W + 120) * S), Math.round((H + 120) * S));
+    const g = c.getContext('2d', { willReadFrequently: WRF });
+    g.setTransform(S, 0, 0, S, 60 * S, 60 * S);
+    F.sky(g, PURPLE_D, '#2a0f4a', { x: -60, y: -60, w: W + 120, h: H + 120, mid: PURPLE, midAt: 0.5 });
     // nebula clouds: overlapping soft radial blobs
     const blob = (x, y, r, col, a) => {
       const gr = g.createRadialGradient(x, y, 0, x, y, r);
@@ -216,6 +220,7 @@
     draw(ctx, tIn, info) {
       const L = info.lib;
       const t = clamp(tIn, 0, info.dur);
+      WRF = wrfOf(ctx);
       const tw = L.onTwos(t);
       const hitFrames = (a, n) => t >= a - 1e-6 && t < a + n * FR - 1e-6;
       const bp = F.beatPulse(t, 0.5, 0.16);
@@ -230,7 +235,7 @@
       ctx.translate(-W / 2, -1100);
 
       // 1. cosmos
-      ctx.drawImage(L.cached(ID + '-cosmos-' + (FILM.S || 1), buildCosmos), -60, -60, W + 120, H + 120);
+      ctx.drawImage(L.cached(ID + '-cosmos-' + (FILM.S || 1) + (WRF ? 'r' : 'g'), buildCosmos), -60, -60, W + 120, H + 120);
       // 2. animated sky
       nebulaArms(ctx, t);
       F.stars(ctx, { n: 90, seed: 49, x: 0, y: 0, w: W, h: H });

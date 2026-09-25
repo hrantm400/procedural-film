@@ -163,7 +163,7 @@
         P.sit = true; P.hipY = 105; P.aL = [0.35, -0.9]; P.aR = [-0.35, 0.9]; P.hands = ['open', 'open'];
         break;
       case 'fist':
-        P.aL = [0.5, -0.3]; P.aR = [-2.55, -0.9]; P.lL = [0.22, -0.05]; P.lR = [-0.22, 0.05]; P.hands = ['fist', 'fist']; P.head = -0.05;
+        P.aL = [0.5, -0.3]; P.aR = [-2.2, -0.94]; P.lL = [0.22, -0.05]; P.lR = [-0.22, 0.05]; P.hands = ['fist', 'fist']; P.head = -0.05;
         break;
       case 'point':
         P.aL = [0.18, -0.12]; P.aR = [-1.62, 0.1]; P.lL = [0.12, 0]; P.lR = [-0.12, 0]; P.hands = ['fist', 'point']; P.lean = -0.04;

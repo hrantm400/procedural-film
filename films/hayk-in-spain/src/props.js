@@ -925,8 +925,9 @@
   function bubble(ctx, str, x, y, o = {}) {
     let sc = 1;
     if (o.t != null && o.t0 != null) {
-      sc = pop(o.t, o.t0, 0.22);
-      if (sc <= 0) return null;
+      if (o.t < o.t0 - 1 / 24 - 1e-6) return null;
+      sc = L.ease.outBack(clamp((o.t - o.t0 + 1 / 24) / 0.22));
+      if (sc <= 0.01) return null;
     }
     const size = o.size || 48;
     const maxW = o.maxW || 700;

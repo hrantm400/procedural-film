@@ -216,6 +216,50 @@
     return buf;
   }
 
+  // Plucked string (Karplus-Strong): a comb-shaped noise burst circulating through an averaging
+  // loop filter with a fractional-delay allpass for tuning. Normalised to a 0.9 peak.
+  function ksBuffer(ctx, f, secs, bright, t60, pos) {
+    const sr = ctx.sampleRate;
+    const n = Math.max(1, Math.floor(secs * sr));
+    const buf = ctx.createBuffer(1, n, sr);
+    const y = buf.getChannelData(0);
+    const Pd = sr / f - 0.5;
+    const N = Math.max(2, Math.floor(Pd));
+    const fr = Pd - N;
+    const C = (1 - fr) / (1 + fr);
+    const rho = Math.pow(10, -3 / (f * t60));
+    const r = lib.rng(lib.hash('film-ks', Math.round(f * 100)));
+    const exc = new Float32Array(N);
+    let lp = 0;
+    let mean = 0;
+    for (let i = 0; i < N; i++) {
+      lp += bright * (r() * 2 - 1 - lp);
+      exc[i] = lp;
+      mean += lp;
+    }
+    mean /= N;
+    const M = Math.max(1, Math.floor(N * pos));
+    let ax = 0;
+    let ay = 0;
+    let peak = 1e-9;
+    for (let i = 0; i < n; i++) {
+      const a = i >= N ? y[i - N] : 0;
+      const b = i > N ? y[i - N - 1] : 0;
+      const v = rho * 0.5 * (a + b);
+      const ap = C * v + ax - C * ay;
+      ax = v;
+      ay = ap;
+      const e = i < N ? exc[i] - mean - (i >= M ? exc[i - M] - mean : 0) : 0;
+      y[i] = e + ap;
+      const av = Math.abs(y[i]);
+      if (av > peak) peak = av;
+    }
+    const k = 0.9 / peak;
+    const fade = Math.min(n, 480);
+    for (let i = 0; i < n; i++) y[i] *= k * (i >= n - fade ? (n - i) / fade : 1);
+    return buf;
+  }
+
   // Soft limiter transfer curve. The shaper is fed at half level, so the curve covers inputs up to
   // +6 dBFS: linear to the knee, then a tanh shoulder that never passes the ceiling.
   function limiterCurve(ceiling, knee) {
@@ -1266,6 +1310,572 @@
       const f = [[0, 700]];
       for (let k = 1; k * 0.25 < len; k++) f.push([k * 0.25, 650 + 380 * lib.noise1(k * 0.23 + t0, 'film-wind'), 'lin']);
       I.nz(t0, len, { type: 'bandpass', q: 0.45, f, type2: 'lowpass', f2: o.lp || 2600, amp, stereo: true, sustain: true, bus: 'amb', key: 'wind' });
+    };
+
+    // ================================================================ film instruments
+    // Continuous pitch automation for a legato line: [[t, note, glide]] from t0.
+    const glidePts = (phrase, t0, glide) => {
+      const pp = [[0, hz(phrase[0][1])]];
+      for (let i = 1; i < phrase.length; i++) {
+        const dt = phrase[i][0] - t0;
+        pp.push([dt, hz(phrase[i - 1][1]), 'set']);
+        pp.push([dt + (phrase[i][2] || glide), hz(phrase[i][1]), 'exp']);
+      }
+      return pp;
+    };
+
+    // Plucked string from a cached Karplus-Strong buffer: nylon guitar, harp, pizzicato.
+    // o: len, bright, t60, pos, lp, stop (damp after this many seconds), bus, sends
+    const ksCache = {};
+    I.ks = (t, note, vel, o) => {
+      o = o || {};
+      const f = hz(note);
+      const secs = o.len || 1.6;
+      const V = E.voice(t, secs + 0.01, false);
+      if (!V) return;
+      const bright = o.bright === undefined ? 0.5 : o.bright;
+      const t60 = o.t60 || 2;
+      const pos = o.pos || 0.13;
+      const key = [f.toFixed(2), secs, bright, t60, pos].join('|');
+      const buf = ksCache[key] || (ksCache[key] = ksBuffer(ctx, f, secs, bright, t60, pos));
+      const s = ctx.createBufferSource();
+      s.buffer = buf;
+      const lp = E.filt('lowpass', o.lp || 5200, 0.6);
+      const g = E.gain(vel);
+      if (o.stop) V.env(g.gain, [[0, vel], [o.stop, vel, 'set'], [o.stop + 0.05, FLOOR, 'exp']]);
+      s.connect(lp);
+      lp.connect(g);
+      E.out(g, o.bus || 'keys', o);
+      V.buf(s, 0);
+    };
+
+    // Additive piano: five stretched partials that die faster as they rise, a detuned unison
+    // string and a hammer knock.
+    I.piano = (t, note, vel, o) => {
+      o = o || {};
+      const f = hz(note);
+      const dec = o.dec || Math.min(4.5, 0.8 + 2.4 * Math.sqrt(262 / f));
+      const V = E.voice(t, dec + 0.05, false);
+      if (!V) return;
+      const lp = E.filt('lowpass', Math.min(9000, 900 + f * 7), 0.5);
+      const out = E.gain(1);
+      lp.connect(out);
+      E.out(out, o.bus || 'keys', Object.assign({ room: 0.2, hall: 0.2 }, o));
+      const amps = [1, 0.45, 0.25, 0.14, 0.08];
+      for (let k = 1; k <= 5; k++) {
+        const fk = f * k * Math.sqrt(1 + 0.0003 * k * k);
+        if (fk > 16000) break;
+        const d = dec / (1 + 0.7 * (k - 1));
+        const s = E.osc('sine', fk);
+        const g = E.gain(0);
+        V.env(g.gain, [[0, 0], [0.003, vel * amps[k - 1]], [0.1, vel * amps[k - 1] * 0.55, 'exp'], [d, FLOOR, 'exp']]);
+        s.connect(g);
+        g.connect(lp);
+        V.osc(s, d + 0.02);
+      }
+      const u = E.osc('sine', f);
+      u.detune.value = 3.5;
+      const ug = E.gain(0);
+      V.env(ug.gain, perc(vel * 0.35, 0.003, dec * 0.8));
+      u.connect(ug);
+      ug.connect(lp);
+      V.osc(u);
+      const n = E.noise(V, ['pno', t, f]);
+      const nf = E.filt('bandpass', Math.min(5000, f * 5), 1.2);
+      const ng = E.gain(0);
+      V.env(ng.gain, perc(vel * 0.2, 0.0008, 0.02));
+      n.connect(nf);
+      nf.connect(ng);
+      ng.connect(out);
+    };
+
+    // Electric piano: 1:1 FM with a decaying index and a faint tine.
+    I.ep = (t, note, vel, o) => {
+      o = o || {};
+      const f = hz(note);
+      const dec = o.dec || 1.6;
+      const V = E.voice(t, dec + 0.05, false);
+      if (!V) return;
+      const c = E.osc('sine', f);
+      const m = E.osc('sine', f);
+      const mg = E.gain(0);
+      V.env(mg.gain, [[0, f * 1.5], [0.3, f * 0.35, 'exp'], [dec, f * 0.12, 'exp']]);
+      m.connect(mg);
+      mg.connect(c.frequency);
+      const lp = E.filt('lowpass', o.lp || 2600, 0.6);
+      const g = E.gain(0);
+      V.env(g.gain, [[0, 0], [0.003, vel], [0.2, vel * 0.55, 'exp'], [dec, FLOOR, 'exp']]);
+      c.connect(lp);
+      lp.connect(g);
+      E.out(g, o.bus || 'keys', Object.assign({ room: 0.15 }, o));
+      V.osc(c);
+      V.osc(m);
+      const tn = E.osc('sine', f * 7.1);
+      const tg = E.gain(0);
+      V.env(tg.gain, perc(vel * 0.05, 0.001, 0.08));
+      tn.connect(tg);
+      E.out(tg, o.bus || 'keys', o);
+      V.osc(tn, 0.12);
+    };
+
+    // Taiko / timpani-ish drum: a pitch-dropping body, an inharmonic overtone, skin and stick.
+    I.taiko = (t, vel, f, o) => {
+      o = o || {};
+      f = f || 70;
+      const dec = o.dec || 0.8;
+      const V = E.voice(t, dec + 0.05, false);
+      if (!V) return;
+      const s = E.osc('sine', f * 1.8);
+      V.env(s.frequency, [[0, f * 1.8], [0.03, f, 'exp'], [dec, f * 0.85, 'exp']]);
+      const g = E.gain(0);
+      V.env(g.gain, [[0, 0], [0.002, vel], [0.12, vel * 0.6, 'exp'], [dec, FLOOR, 'exp']]);
+      s.connect(g);
+      E.out(g, 'drums', { room: 0.3, hall: o.hall || 0.12 });
+      V.osc(s);
+      const s2 = E.osc('sine', f * 2.6);
+      V.env(s2.frequency, [[0, f * 3.2], [0.03, f * 2.6, 'exp']]);
+      const g2 = E.gain(0);
+      V.env(g2.gain, perc(vel * 0.35, 0.002, dec * 0.3));
+      s2.connect(g2);
+      E.out(g2, 'drums', { room: 0.3 });
+      V.osc(s2, dec * 0.3 + 0.02);
+      const n = E.noise(V, ['taiko', t, f]);
+      const nf = E.filt('bandpass', o.skin || 1800, 0.8);
+      const ng = E.gain(0);
+      V.env(ng.gain, perc(vel * 0.45, 0.001, 0.03));
+      n.connect(nf);
+      nf.connect(ng);
+      E.out(ng, 'drums', { room: 0.4, hall: o.hall || 0.12 });
+    };
+
+    I.snare = (t, vel, o) => {
+      o = o || {};
+      const dec = o.dec || 0.17;
+      const V = E.voice(t, dec + 0.03, false);
+      if (!V) return;
+      const tri = E.osc('triangle', 210);
+      V.env(tri.frequency, [[0, 240], [0.03, 180, 'exp']]);
+      const tg = E.gain(0);
+      V.env(tg.gain, perc(vel * 0.55, 0.001, 0.07));
+      tri.connect(tg);
+      E.out(tg, 'drums', { room: 0.2 });
+      V.osc(tri, 0.1);
+      const n = E.noise(V, ['snare', t]);
+      const hp = E.filt('highpass', o.hp || 1300, 0.7);
+      const pk = E.filt('peaking', 4200, 1);
+      pk.gain.value = 4;
+      const g = E.gain(0);
+      V.env(g.gain, [[0, 0], [0.001, vel], [0.03, vel * 0.5, 'exp'], [dec, FLOOR, 'exp']]);
+      n.connect(hp);
+      hp.connect(pk);
+      pk.connect(g);
+      E.out(g, 'drums', { room: o.room || 0.22, pan: 0.05 });
+    };
+
+    // Hand clap: three fast band-passed noise spikes and a short tail.
+    I.clap = (t, vel, o) => {
+      o = o || {};
+      const V = E.voice(t, 0.2, false);
+      if (!V) return;
+      const n = E.noise(V, ['clap', t]);
+      const bp = E.filt('bandpass', o.f || 1250, 1.3);
+      const g = E.gain(0);
+      V.env(g.gain, [[0, 0], [0.001, vel], [0.009, vel * 0.25, 'exp'], [0.0105, vel * 0.9, 'lin'], [0.019, vel * 0.25, 'exp'], [0.0205, vel, 'lin'], [0.18, FLOOR, 'exp']]);
+      n.connect(bp);
+      bp.connect(g);
+      E.out(g, 'perc', { room: 0.3, pan: o.pan || 0 });
+    };
+
+    // Cajon: bass tone or slap.
+    I.cajon = (t, vel, slap) => {
+      const V = E.voice(t, 0.26, false);
+      if (!V) return;
+      if (!slap) {
+        const s = E.osc('sine', 130);
+        V.env(s.frequency, [[0, 130], [0.03, 72, 'exp']]);
+        const g = E.gain(0);
+        V.env(g.gain, perc(vel, 0.002, 0.2));
+        s.connect(g);
+        E.out(g, 'drums', { room: 0.25 });
+        V.osc(s);
+        const n = E.noise(V, ['caj', t]);
+        const f = E.filt('lowpass', 900, 0.7);
+        const ng = E.gain(0);
+        V.env(ng.gain, perc(vel * 0.4, 0.001, 0.025));
+        n.connect(f);
+        f.connect(ng);
+        E.out(ng, 'drums');
+      } else {
+        const n = E.noise(V, ['cajs', t]);
+        const f = E.filt('bandpass', 2600, 0.7);
+        const ng = E.gain(0);
+        V.env(ng.gain, [[0, 0], [0.001, vel], [0.02, vel * 0.4, 'exp'], [0.16, FLOOR, 'exp']]);
+        n.connect(f);
+        f.connect(ng);
+        E.out(ng, 'perc', { room: 0.25 });
+        const s = E.osc('sine', 260);
+        const g = E.gain(0);
+        V.env(g.gain, perc(vel * 0.45, 0.001, 0.05));
+        s.connect(g);
+        E.out(g, 'drums');
+        V.osc(s, 0.1);
+      }
+    };
+
+    // Brass section stab: brass saws per note with a pitch scoop and a fast filter bloom.
+    I.brass = (t, notes, len, vel, o) => {
+      o = o || {};
+      const rel = o.rel || 0.14;
+      const V = E.voice(t, len + rel + 0.02, false);
+      if (!V) return;
+      const top = o.bright || 4200;
+      const lp = E.filt('lowpass', 600, 1.1);
+      V.env(lp.frequency, [[0, 600], [0.03, top, 'exp'], [len, top * 0.4, 'exp'], [len + rel, 500, 'exp']]);
+      const g = E.gain(0);
+      V.env(g.gain, [[0, 0], [0.006, vel], [0.09, vel * 0.62, 'exp'], [len, vel * 0.5, 'lin'], [len + rel, 0, 'lin']]);
+      lp.connect(g);
+      E.out(g, o.bus || 'lead', Object.assign({ hall: 0.18, room: 0.1 }, o));
+      const per = 0.6 / Math.sqrt(notes.length);
+      for (const nm of notes) {
+        const f = hz(nm);
+        for (const d of [-8, 8]) {
+          const s = E.osc(E.brassSaw, f);
+          s.detune.value = d;
+          V.env(s.frequency, [[0, f * 0.96], [0.04, f, 'exp']]);
+          const sg = E.gain(per);
+          s.connect(sg);
+          sg.connect(lp);
+          V.osc(s);
+        }
+      }
+    };
+
+    // Funk / synth bass: warm saw through a resonant plucked filter, plus a sine body.
+    I.bass = (t, note, len, vel, o) => {
+      o = o || {};
+      const f = hz(note);
+      const V = E.voice(t, len + 0.06, false);
+      if (!V) return;
+      const lp = E.filt('lowpass', 300, o.q || 2.5);
+      const top = Math.min(4000, f * (o.bright || 12));
+      V.env(lp.frequency, [[0, top], [0.09, Math.max(160, f * 3), 'exp'], [len + 0.05, Math.max(120, f * 2), 'exp']]);
+      const g = E.gain(0);
+      V.env(g.gain, [[0, 0], [0.004, vel], [0.08, vel * 0.7, 'exp'], [len, vel * 0.55, 'lin'], [len + 0.05, 0, 'lin']]);
+      const a = E.osc(E.warmSaw, f);
+      const s = E.osc('sine', f);
+      const sg = E.gain(0.7);
+      a.connect(lp);
+      lp.connect(g);
+      s.connect(sg);
+      sg.connect(g);
+      E.out(g, 'bass', o);
+      V.osc(a);
+      V.osc(s);
+    };
+
+    // Cartoon dog bark: a saw+square "woof" gliding down through two moving vowel formants, a
+    // growl chopper, a body low-pass and a breathy noise burst. big: lower, longer, with a chest thump.
+    I.bark = (t, vel, o) => {
+      o = o || {};
+      const big = !!o.big;
+      const len = big ? 0.26 : 0.14;
+      const f0 = (o.f || 500) * (big ? 0.78 : 1);
+      const V = E.voice(t, len + 0.06, false);
+      if (!V) return;
+      const fe = [[0, f0 * 0.72], [0.018, f0, 'exp'], [len, f0 * 0.5, 'exp']];
+      const mix = E.gain(1);
+      for (const [type, a, det] of [['sawtooth', 0.55, -8], ['square', 0.3, 8]]) {
+        const s = E.osc(type, f0);
+        s.detune.value = det;
+        V.env(s.frequency, fe);
+        const sg = E.gain(a);
+        s.connect(sg);
+        sg.connect(mix);
+        V.osc(s);
+      }
+      const am = E.gain(0.7);
+      const lfo = E.osc('square', big ? 48 : 62);
+      const lg = E.gain(0.3);
+      lfo.connect(lg);
+      lg.connect(am.gain);
+      V.osc(lfo);
+      mix.connect(am);
+      const fa = E.filt('bandpass', 1400, 1.6);
+      V.env(fa.frequency, [[0, 1500], [len, 700, 'exp']]);
+      const fb = E.filt('bandpass', 2600, 3);
+      V.env(fb.frequency, [[0, 2600], [len, 1700, 'exp']]);
+      const fbg = E.gain(0.6);
+      const body = E.filt('lowpass', 900, 0.8);
+      const bg = E.gain(0.5);
+      am.connect(fa);
+      am.connect(fb);
+      fb.connect(fbg);
+      am.connect(body);
+      body.connect(bg);
+      const g = E.gain(0);
+      V.env(g.gain, [[0, 0], [0.004, vel], [len * 0.4, vel * 0.75, 'lin'], [len, FLOOR, 'exp']]);
+      fa.connect(g);
+      fbg.connect(g);
+      bg.connect(g);
+      E.out(g, 'sfx', { room: 0.25, hall: big ? 0.25 : 0.08, pan: o.pan || 0 });
+      I.nz(t, len * 0.8, { type: 'bandpass', q: 1.1, f: [[0, 2200], [len * 0.8, 900, 'exp']], amp: [[0, 0], [0.002, vel * 0.7], [0.03, vel * 0.25, 'exp'], [len * 0.8, FLOOR, 'exp']], pan: o.pan || 0, room: 0.2, key: 'bark' });
+      if (big) {
+        const c = E.osc('sine', 170);
+        V.env(c.frequency, [[0, 170], [0.2, 80, 'exp']]);
+        const cg = E.gain(0);
+        V.env(cg.gain, perc(vel * 0.8, 0.003, 0.22));
+        c.connect(cg);
+        E.out(cg, 'sfx', { room: 0.2 });
+        V.osc(c);
+      }
+    };
+
+    // Dog howl: pitch contour pts [[dt, hz, shape]], saw + sine through a sliding "oo-aa-oo"
+    // formant and a fixed one, with vibrato that grows into the note.
+    I.howl = (t, len, pts, vel, o) => {
+      o = o || {};
+      const V = E.voice(t, len + 0.05, true);
+      if (!V) return;
+      const pitch = ctx.createConstantSource();
+      V.env(pitch.offset, pts);
+      const lfo = E.osc('sine', o.vibHz || 5.6);
+      const vg = E.gain(0);
+      V.env(vg.gain, [[0, 0], [Math.min(0.4, len * 0.3), 0], [len * 0.6, pts[0][1] * 0.05, 'lin'], [len, pts[0][1] * 0.03, 'lin']]);
+      lfo.connect(vg);
+      const saw = E.osc('sawtooth', 0);
+      const sn = E.osc('sine', 0);
+      for (const s of [saw, sn]) {
+        pitch.connect(s.frequency);
+        vg.connect(s.frequency);
+      }
+      const f1 = E.filt('bandpass', 500, 2.2);
+      V.env(f1.frequency, [[0, 450], [len * 0.35, 950, 'exp'], [len, 450, 'exp']]);
+      const f2 = E.filt('bandpass', o.f2 || 1350, 4);
+      const mix = E.gain(1);
+      const sg = E.gain(0.5);
+      saw.connect(sg);
+      sg.connect(f1);
+      sg.connect(f2);
+      const f2g = E.gain(0.5);
+      f2.connect(f2g);
+      f2g.connect(mix);
+      f1.connect(mix);
+      const sng = E.gain(0.3);
+      sn.connect(sng);
+      sng.connect(mix);
+      const g = E.gain(0);
+      V.env(g.gain, [[0, 0], [o.att || 0.12, vel, 'lin'], [len * 0.7, vel * 0.85, 'lin'], [len, FLOOR, 'exp']]);
+      mix.connect(g);
+      E.out(g, 'sfx', Object.assign({ hall: 0.3, cave: 0.15 }, o));
+      V.osc(pitch);
+      V.osc(lfo);
+      V.osc(saw);
+      V.osc(sn);
+    };
+
+    // Small dog whine: a band-passed triangle bending up and down with a fast vibrato.
+    I.whine = (t, len, f0, f1, f2, vel) => {
+      const V = E.voice(t, len + 0.05, false);
+      if (!V) return;
+      const s = E.osc('triangle', f0);
+      V.env(s.frequency, [[0, f0], [len * 0.35, f1, 'exp'], [len, f2, 'exp']]);
+      const lfo = E.osc('sine', 7.5);
+      const lg = E.gain(f1 * 0.025);
+      lfo.connect(lg);
+      lg.connect(s.frequency);
+      const bp = E.filt('bandpass', f1, 0.9);
+      const g = E.gain(0);
+      V.env(g.gain, [[0, 0], [0.06, vel], [len * 0.75, vel * 0.8, 'lin'], [len, FLOOR, 'exp']]);
+      s.connect(bp);
+      bp.connect(g);
+      E.out(g, 'sfx', { room: 0.2, hall: 0.15 });
+      V.osc(s);
+      V.osc(lfo);
+    };
+
+    // "Aah" choir: three detuned warm saws per note with a shared vibrato, through three vowel formants.
+    I.choir = (t0, t1, notes, vel, o) => {
+      o = o || {};
+      const hold = t1 - t0;
+      const att = Math.min(o.att === undefined ? 0.6 : o.att, hold);
+      const rel = o.rel === undefined ? 1 : o.rel;
+      const len = hold + rel;
+      const V = E.voice(t0, len, true);
+      if (!V) return;
+      const sum = E.gain(1 / Math.sqrt(notes.length * 3));
+      const lfo = E.osc('sine', 5.1);
+      const lg = E.gain(11);
+      lfo.connect(lg);
+      notes.forEach((nm, i) => {
+        const f = hz(nm);
+        [-12, 0, 12].forEach((d, j) => {
+          const s = E.osc(E.warmSaw, f);
+          s.detune.value = d + (i % 2 ? 3 : -3);
+          lg.connect(s.detune);
+          const p = E.panner((j - 1) * 0.5);
+          s.connect(p);
+          p.connect(sum);
+          V.osc(s);
+        });
+      });
+      const g = E.gain(0);
+      V.env(g.gain, [[0, 0], [att, vel, o.attShape || 'lin'], [hold, vel * (o.sus || 1), 'lin'], [len, 0, 'lin']]);
+      for (const [f, q, a] of [[700, 3.5, 1], [1150, 5, 0.6], [2700, 7, 0.3]]) {
+        const bp = E.filt('bandpass', f, q);
+        const bg = E.gain(a * 2.2);
+        sum.connect(bp);
+        bp.connect(bg);
+        bg.connect(g);
+      }
+      E.out(g, 'pad', Object.assign({ hall: 0.5, cave: 0.2 }, o));
+      V.osc(lfo);
+    };
+
+    // Bowed string line: legato phrase [[t, note, glide]] on three detuned warm saws with vibrato.
+    I.bowed = (phrase, tEnd, vel, o) => {
+      o = o || {};
+      const t0 = phrase[0][0];
+      const rel = o.rel || 0.6;
+      const len = tEnd - t0 + rel;
+      const V = E.voice(t0, len, true);
+      if (!V) return;
+      const pitch = ctx.createConstantSource();
+      V.env(pitch.offset, glidePts(phrase, t0, o.glide || 0.07));
+      const f0 = hz(phrase[0][1]);
+      const lfo = E.osc('sine', 5.2);
+      const vg = E.gain(0);
+      V.env(vg.gain, [[0, 0], [0.35, 0], [0.9, f0 * (o.vib || 0.007), 'lin']]);
+      lfo.connect(vg);
+      const lp = E.filt('lowpass', o.cut || 2800, 0.7);
+      const g = E.gain(0);
+      V.env(g.gain, [[0, 0], [o.att || 0.18, vel], [tEnd - t0, vel * (o.sus || 0.95), 'lin'], [len, 0, 'lin']]);
+      for (const d of [-9, 0, 9]) {
+        const s = E.osc(E.warmSaw, 0);
+        s.detune.value = d;
+        pitch.connect(s.frequency);
+        vg.connect(s.frequency);
+        const sg = E.gain(0.4);
+        s.connect(sg);
+        sg.connect(lp);
+        V.osc(s);
+      }
+      lp.connect(g);
+      E.out(g, o.bus || 'lead', Object.assign({ hall: 0.3 }, o));
+      V.osc(pitch);
+      V.osc(lfo);
+    };
+
+    // Whistled tune: [[t, note, dur]], a sine with articulated notes, vibrato and breath.
+    I.whistleLine = (phrase, tEnd, vel, o) => {
+      o = o || {};
+      const t0 = phrase[0][0];
+      const len = tEnd - t0 + 0.15;
+      const V = E.voice(t0, len, true);
+      if (!V) return;
+      const pitch = ctx.createConstantSource();
+      V.env(pitch.offset, glidePts(phrase.map(([t, n]) => [t, n, 0.035]), t0, 0.035));
+      const amp = [[0, 0]];
+      for (const [t, , d] of phrase) {
+        const a = t - t0;
+        amp.push([a + 0.025, vel, 'lin']);
+        amp.push([a + Math.max(0.05, d - 0.05), vel * 0.8, 'lin']);
+        amp.push([a + d, vel * 0.1, 'lin']);
+      }
+      amp.push([len, 0, 'lin']);
+      const s = E.osc('sine', 0);
+      pitch.connect(s.frequency);
+      const lfo = E.osc('sine', 6);
+      const lg = E.gain(hz(phrase[0][1]) * 0.012);
+      lfo.connect(lg);
+      lg.connect(s.frequency);
+      const g = E.gain(0);
+      V.env(g.gain, amp);
+      s.connect(g);
+      const n = E.noise(V, ['wbreath', t0]);
+      const nf = E.filt('bandpass', hz(phrase[0][1]), 2);
+      const ng = E.gain(0.06);
+      n.connect(nf);
+      nf.connect(ng);
+      ng.connect(g);
+      E.out(g, o.bus || 'lead', Object.assign({ room: 0.2, hall: 0.2 }, o));
+      V.osc(pitch);
+      V.osc(s);
+      V.osc(lfo);
+    };
+
+    // Record scratch: a resonant noise band yanked up and down.
+    I.scratch = (t, vel) =>
+      I.nz(t, 0.34, {
+        type: 'bandpass',
+        q: 4,
+        f: [[0, 900], [0.05, 3200, 'exp'], [0.1, 600, 'exp'], [0.19, 2600, 'exp'], [0.34, 350, 'exp']],
+        amp: [[0, 0], [0.003, vel], [0.09, vel * 0.8, 'lin'], [0.11, vel * 0.25, 'lin'], [0.14, vel, 'lin'], [0.34, FLOOR, 'exp']],
+        key: 'scratch',
+        room: 0.1,
+      });
+
+    // Tire screech: a narrow wobbling noise band plus a squealing saw.
+    I.skrrt = (t, len, vel) => {
+      const f = [[0, 3300]];
+      for (let k = 1; k * 0.03 < len; k++) f.push([k * 0.03, (k % 2 ? 3000 : 2500) - 900 * ((k * 0.03) / len), 'lin']);
+      I.nz(t, len, { type: 'bandpass', q: 7, f, amp: [[0, 0], [0.004, vel], [len * 0.7, vel * 0.8, 'lin'], [len, FLOOR, 'exp']], stereo: true, room: 0.2, key: 'skrrt' });
+      const V = E.voice(t, len + 0.02, false);
+      if (!V) return;
+      const s = E.osc('sawtooth', 1500);
+      V.env(s.frequency, [[0, 1600], [len, 1100, 'exp']]);
+      const lfo = E.osc('sine', 23);
+      const lg = E.gain(90);
+      lfo.connect(lg);
+      lg.connect(s.frequency);
+      const bp = E.filt('bandpass', 3000, 3);
+      const g = E.gain(0);
+      V.env(g.gain, [[0, 0], [0.01, vel * 0.3], [len * 0.7, vel * 0.25, 'lin'], [len, FLOOR, 'exp']]);
+      s.connect(bp);
+      bp.connect(g);
+      E.out(g, 'sfx', { room: 0.2 });
+      V.osc(s);
+      V.osc(lfo);
+    };
+
+    // Phone on vibrate: a low square rattled by a 32 Hz chopper.
+    I.phoneBuzz = (t, len, vel) => {
+      const V = E.voice(t, len + 0.02, false);
+      if (!V) return;
+      const s = E.osc('square', 150);
+      const am = E.gain(0.6);
+      const lfo = E.osc('square', 32);
+      const lg = E.gain(0.4);
+      lfo.connect(lg);
+      lg.connect(am.gain);
+      const lp = E.filt('lowpass', 2400, 0.8);
+      const g = E.gain(0);
+      V.env(g.gain, [[0, 0], [0.003, vel], [len - 0.02, vel, 'lin'], [len, 0, 'lin']]);
+      s.connect(am);
+      am.connect(lp);
+      lp.connect(g);
+      E.out(g, 'sfx', { room: 0.15 });
+      V.osc(s);
+      V.osc(lfo);
+    };
+
+    // Crunch: a dense front-loaded crackle of clicks, a torn noise band and a woody knock.
+    I.crunch = (t, vel, key) => {
+      I.play(
+        t,
+        0.32,
+        () => grainBuffer(ctx, ['crunch', key], 0.32, clickGrains(lib.rng(lib.hash('film-crunch', key)), 0, 0.28, 170, { amp: 0.5, f0: 1200, f1: 6500, shape: 1.7, q: 1.4, dec: 0.0025 })),
+        vel,
+        { bus: 'sfx', room: 0.15, sustain: false }
+      );
+      I.nz(t, 0.24, {
+        type: 'bandpass',
+        q: 0.8,
+        f: [[0, 3200], [0.22, 1000, 'exp']],
+        amp: [[0, 0], [0.002, vel * 0.8], [0.035, vel * 0.35, 'exp'], [0.07, vel * 0.5, 'lin'], [0.11, vel * 0.2, 'exp'], [0.14, vel * 0.4, 'lin'], [0.24, FLOOR, 'exp']],
+        key: 'crunch' + key,
+        room: 0.15,
+      });
+      I.tock(t, vel * 0.6, 210, { bus: 'sfx' });
     };
 
     return I;

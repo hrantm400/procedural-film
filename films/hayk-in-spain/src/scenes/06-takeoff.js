@@ -424,16 +424,14 @@
     }
     ctx.restore();
 
-    // markers: Armenia flag (right) and Spain flag + pin (left)
-    F.flag(ctx, YVN[0] + 6, YVN[1] + 4, 0.55, 'AM', { t });
-    F.ellipse(ctx, YVN[0], YVN[1], 12, 12); F.fo(ctx, '#ffffff', 4);
-    const arrived = t >= B_FLY1;
-    const spop = arrived ? F.popIn(t, B_FLY1) : 1;
-    F.flag(ctx, MAD[0] - 4, MAD[1] + 4, 0.55 * (arrived ? spop : 0.85), 'ES', { t });
-    F.ellipse(ctx, MAD[0], MAD[1], 12, 12); F.fo(ctx, arrived ? '#ffe14a' : '#ffffff', 4);
-    F.tag(ctx, 'YEREVAN', YVN[0] - 40, YVN[1] + 58, { size: 26, bg: '#1b1424' });
-    F.tag(ctx, 'SPAIN', MAD[0] + 30, MAD[1] + 58, { size: 26, bg: '#1b1424' });
-
+    // arrival pop over Spain (burst behind the plane, only a few frames)
+    const arrivedNow = t >= B_FLY1;
+    if (arrivedNow && t < B_FLY1 + 0.3) {
+      const k = F.popIn(t, B_FLY1);
+      ctx.save(); ctx.globalAlpha = 1 - clamp((t - B_FLY1 - 0.15) / 0.15);
+      F.burst(ctx, MAD[0], MAD[1], 110 * k, 60 * k, 12, '#fff05a', { lw: 5, seed: 67 });
+      ctx.restore();
+    }
     // plane icon along the arc (faces left, towards Spain)
     const pu = t < B_FLY0 ? 0 : fu;
     const pp = arcPt(pu), tg = arcTan(Math.min(0.999, Math.max(0.001, pu)));
@@ -450,14 +448,20 @@
     const bob = Math.sin(t * 9) * 3;
     F.plane(ctx, pp[0], pp[1] + bob, 0.44, { rot: ang + Math.PI, flip: true, tail: '#e8413c' });
     if (t >= B_FLY0 && t < B_FLY1) F.speedLines(ctx, { x: pp[0] - 60, y: pp[1] - 50, w: 260, h: 100, angle: ang + Math.PI, count: 8, color: '#ffffff', alpha: 0.7, t, speed: 1200, len: 90, width: 5, seed: 66 });
-    // arrival pop over Spain
-    if (arrived) {
-      const k = F.popIn(t, B_FLY1);
-      F.burst(ctx, MAD[0], MAD[1], 90 * k, 50 * k, 12, '#fff05a', { lw: 5, seed: 67 });
+    // markers: Armenia flag (right) and Spain flag + pin (left)
+    F.flag(ctx, YVN[0] + 6, YVN[1] + 4, 0.55, 'AM', { t });
+    F.ellipse(ctx, YVN[0], YVN[1], 12, 12); F.fo(ctx, '#ffffff', 4);
+    const arrived = t >= B_FLY1;
+    const spop = arrived ? F.popIn(t, B_FLY1) : 1;
+    F.flag(ctx, MAD[0] - 4, MAD[1] + 4, 0.55 * (arrived ? spop : 0.85), 'ES', { t });
+    F.ellipse(ctx, MAD[0], MAD[1], 12, 12); F.fo(ctx, arrived ? '#ffe14a' : '#ffffff', 4);
+    F.tag(ctx, 'YEREVAN', YVN[0] - 40, YVN[1] + 58, { size: 26, bg: '#1b1424' });
+    F.tag(ctx, 'SPAIN', MAD[0] + 30, MAD[1] + 58, { size: 26, bg: '#1b1424' });
+
+    if (arrivedNow) {
       F.shockRing(ctx, MAD[0], MAD[1], t - B_FLY1, { r: 220, color: '#ffffff', life: 0.45, width: 16 });
       F.sparkles(ctx, { x: MAD[0] - 140, y: MAD[1] - 140, w: 280, h: 280, n: 6, seed: 68, t, size: 30 });
     }
-
     // captions (screen fixed, inside the safe area)
     F.caption(ctx, 'YEREVAN -> SPAIN', 540, 290, { size: 74, align: 'center', t, t0: B_CAP1, from: 'left', bg: '#1b1424', accent: '#e8413c' });
     F.caption(ctx, '1 MONTH. MISSION: INVESTORS.', 540, 1470, { size: 50, align: 'center', t, t0: B_CAP2, from: 'right', bg: '#e8413c', accent: '#ffcc33' });
