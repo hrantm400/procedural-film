@@ -27,7 +27,7 @@
 
   // Mix constants, tuned by measurement (tools/audio): loudness, peaks, per-bar profile.
   const MIX = {
-    trim: 0.8,
+    trim: 0.7,
     ceiling: 0.66, // soft limiter output ceiling (about -3.6 dBFS)
     knee: 0.5,
     bus: { drums: 0.6, perc: 0.8, bass: 0.3, pad: 0.26, keys: 0.6, bells: 0.45, lead: 0.5, sfx: 0.62, amb: 0.5 },
@@ -1077,12 +1077,14 @@
       phrase.forEach(([t, nm], i) => {
         const dt = t - t0;
         const f = hz(nm);
+        // keep each note's points inside its own span so fast phrases stay time-ordered
+        const gap = Math.max(0.02, (i + 1 < phrase.length ? phrase[i + 1][0] : tEnd) - t);
         if (i === 0) pp.push([0, f * 0.97]);
         else pp.push([dt, f * 0.97, 'set']);
-        pp.push([dt + 0.07, f, 'exp']);
+        pp.push([dt + Math.min(0.07, gap * 0.5), f, 'exp']);
         cut.push([dt, 300, i === 0 ? 'lin' : 'set']);
-        cut.push([dt + 0.16, 2400, 'exp']);
-        cut.push([dt + 0.45, 1500, 'exp']);
+        cut.push([dt + Math.min(0.16, gap * 0.4), 2400, 'exp']);
+        cut.push([dt + Math.min(0.45, gap * 0.9), 1500, 'exp']);
       });
       cut[0] = [0, 300];
       V.env(pitch.offset, pp);
@@ -1456,6 +1458,7 @@
 
     I.snare = (t, vel, o) => {
       o = o || {};
+      vel *= 0.75;
       const dec = o.dec || 0.17;
       const V = E.voice(t, dec + 0.03, false);
       if (!V) return;
@@ -1984,8 +1987,8 @@
       o = o || {};
       taiko(t, v, o.f || 50, { dec: 1.3, hall: 0.3 });
       kick(t, v, 'full');
-      crash(t, 0.55 * v, { dec: o.dec || 1.8 });
-      subDrop(t, 110, 36, 1.0, 0.75 * v);
+      crash(t, 0.45 * v, { dec: o.dec || 1.8 });
+      subDrop(t, 110, 36, 1.0, 0.7 * v);
       E.duck(t, 0.7);
     };
     const gtr = { bright: 0.42, t60: 1.5, len: 1.4, lp: 3600, room: 0.2, hall: 0.06 };
