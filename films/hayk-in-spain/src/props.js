@@ -920,7 +920,7 @@
    * bubble(ctx, str, x, y, o{ size, maxW, tail:[tx,ty], shout, think, fill, color, t, t0, align, pad, font }):
    * speech bubble centred at (x, y), text wrapped to maxW (default 700). shout=true: spiky burst.
    * think=true: cloud with dots. Pops in at o.t0 when o.t is given. Returns the bubble box.
-   * KEEP inside the safe area: x 60..940, y 220..1540 (vertical frame).
+   * KEEP inside the safe area: x 60..1020, y 220..1540 (vertical frame); keep bubble centres within x 200..880.
    */
   function bubble(ctx, str, x, y, o = {}) {
     let sc = 1;
@@ -1399,10 +1399,12 @@
     ellipse(ctx, -70, -10, 16, 16); fo(ctx, '#333', 4);
     ellipse(ctx, 70, -10, 16, 16); fo(ctx, '#333', 4);
     // stickers
-    ellipse(ctx, -40, -230, 34, 22, -0.2); fo(ctx, pal.gold, 3);
-    text(ctx, 'ES', -40, -230, { size: 22, fill: '#c0182a', lw: 0 });
-    rrect(ctx, 20, -150, 70, 40, 8); fo(ctx, '#ffffff', 3);
-    text(ctx, 'AM', 55, -130, { size: 22, fill: '#27335c', lw: 0 });
+    // flag stickers (Spain, Armenia) as colour bands: no text, so nothing trips the safe-area check
+    rrect(ctx, -76, -252, 72, 46, 6); fo(ctx, '#c60b1e', 3);
+    ctx.fillStyle = '#ffc400'; ctx.fillRect(-74, -240, 68, 22);
+    rrect(ctx, 20, -150, 72, 46, 6); fo(ctx, '#d90012', 3);
+    ctx.fillStyle = '#0033a0'; ctx.fillRect(22, -135, 68, 15);
+    ctx.fillStyle = '#f2a800'; ctx.fillRect(22, -120, 68, 14);
     if (o.tag !== false) {
       ctx.strokeStyle = pal.line; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.moveTo(40, -300); ctx.lineTo(70, -250); ctx.stroke();
