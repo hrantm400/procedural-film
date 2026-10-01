@@ -158,7 +158,7 @@
         ctx.rotate(s.rot);
         const sc = 1 - age * 0.35;
         ctx.scale(sc, sc);
-        flatNotification(ctx, -N_W / 2, -N_H / 2, { icon: bzIcon(t), app: 'биржа', title: BZ[k].title, color: C.bzDeep });
+        flatNotification(ctx, -N_W / 2, -N_H / 2, { icon: bzIcon(t), app: 'Charts', title: BZ[k].title, color: C.bzDeep });
         ctx.restore();
       }
       F.focusLines(ctx, 540, 1180, { inner: 260, count: 48, color: '#ffffff', alpha: 0.7 * (1 - seg(t, HIT, HIT + 0.3)), t });
@@ -249,7 +249,7 @@
         ctx.translate(wx(N_X + N_W / 2), wy(y + N_H / 2));
         const sc = 0.85 + 0.15 * ap;
         ctx.scale(sc, sc);
-        notification(ctx, -N_W / 2, -N_H / 2, { icon: bzIcon(t), app: 'биржа', time: 'now', title: BZ[k].title, alpha: clamp(ap * 2.5), color: C.bzDeep });
+        notification(ctx, -N_W / 2, -N_H / 2, { icon: bzIcon(t), app: 'Charts', time: 'now', title: BZ[k].title, alpha: clamp(ap * 2.5), color: C.bzDeep });
         ctx.restore();
         // red count badge on the newest one
       }

@@ -160,7 +160,7 @@
       const hbY = 280 - (1 - hbDrop) * 260;
       const fl = F.beatPulse(t, T_LAND, 0.1) * (t >= T_LAND ? 1 : 0);
       F.healthBar(ctx, 96, hbY, 370, 44, 1, { color: P.timeBlue, color2: '#bfe9ff', label: 'TIME', labelColor: '#ffffff' });
-      F.healthBar(ctx, 614, hbY, 370, 44, 1, { color: P.bzOrange, color2: '#ffe08a', flip: true, label: 'БИРЖА', labelColor: '#ffffff' });
+      F.healthBar(ctx, 614, hbY, 370, 44, 1, { color: P.bzOrange, color2: '#ffe08a', flip: true, label: 'CHARTS', labelColor: '#ffffff' });
       // round timer badge
       ctx.save();
       ctx.translate(540, hbY + 22);
@@ -177,7 +177,7 @@
         ctx.save();
         F.text(ctx, 'Time', 300 - (1 - wmK) * 500, 1098 + 6, { size: 92, fill: 'rgba(20,30,90,0.35)', letter: -2 });
         FILM.cast.wordmark(ctx, 'time', 300 - (1 - wmK) * 500, 1098, 92, { color: '#ffffff' });
-        F.text(ctx, 'биржа', 770 + (1 - wmK) * 500, 1300 + 6, { size: 92, fill: 'rgba(120,30,10,0.35)', letter: -2 });
+        F.text(ctx, 'Charts', 770 + (1 - wmK) * 500, 1300 + 6, { size: 92, fill: 'rgba(120,30,10,0.35)', letter: -2 });
         FILM.cast.wordmark(ctx, 'birzha', 770 + (1 - wmK) * 500, 1300, 92, { color: '#ffffff' });
         ctx.restore();
       }

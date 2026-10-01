@@ -105,7 +105,7 @@
     F.healthBar(ctx, 90, y, w, h, ht.v, { color: C.timeBlue, color2: who < 0 && fl > 0.5 ? '#ffffff' : C.timeCyan, ghost: ht.g, label: 'TIME', labelColor: C.timeDeep });
     ctx.restore();
     ctx.save(); ctx.translate(800, y + h / 2); ctx.scale(sr, sr); ctx.translate(-800, -(y + h / 2));
-    F.healthBar(ctx, 610, y, w, h, hb.v, { color: C.bzOrange, color2: who > 0 && fl > 0.5 ? '#ffffff' : C.bzYellow, ghost: hb.g, flip: true, label: 'БИРЖА', labelColor: C.bzDeep });
+    F.healthBar(ctx, 610, y, w, h, hb.v, { color: C.bzOrange, color2: who > 0 && fl > 0.5 ? '#ffffff' : C.bzYellow, ghost: hb.g, flip: true, label: 'CHARTS', labelColor: C.bzDeep });
     ctx.restore();
     // FINAL ROUND pill
     const lp = F.popIn(t, 0, 0.5);

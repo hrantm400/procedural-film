@@ -13,7 +13,7 @@
     Object.assign({ id, file, start: B(b0), end: B(b1), mode: 'illustrated', post: false, title, transitionIn: { kind: 'cut', dur: 0 }, brief }, extra || {});
 
   FILM.TIMELINE = {
-    title: 'Time vs биржа',
+    title: 'Time vs Charts',
     bpm: 144,
     duration: 15,
     fps: 60,

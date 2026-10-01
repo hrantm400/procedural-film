@@ -543,7 +543,7 @@
     if (who === 'time') {
       return F.text(ctx, 'Time', x, y, { size, fill: o.color || C.timeBlue, align: o.align, alpha: o.alpha, scale: o.scale, letter: -size * 0.02 });
     }
-    return F.text(ctx, 'биржа', x, y, { size, fill: o.color || C.bzOrange, align: o.align, alpha: o.alpha, scale: o.scale, letter: -size * 0.02 });
+    return F.text(ctx, 'Charts', x, y, { size, fill: o.color || C.bzOrange, align: o.align, alpha: o.alpha, scale: o.scale, letter: -size * 0.02 });
   }
 
   FILM.cast = Object.freeze({ time, birzha, lsMark, lsWordmark, wordmark, glove });
