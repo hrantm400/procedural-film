@@ -27,17 +27,16 @@
 
   // Mix constants, tuned by measurement (tools/audio): loudness, peaks, per-bar profile.
   const MIX = {
-    trim: 1.05,
+    trim: 0.68,
     ceiling: 0.66, // soft limiter output ceiling (about -3.6 dBFS)
     knee: 0.5,
     bus: { drums: 0.6, perc: 0.8, bass: 0.3, pad: 0.26, keys: 0.6, bells: 0.45, lead: 0.5, sfx: 0.62, amb: 0.5 },
     // Master tilt EQ in dB: a low shelf under the subs, presence and air for phone speakers.
     eq: { low: -4, presence: 5, air: 3 },
     comp: { threshold: -18, knee: 10, ratio: 2, attack: 0.006, release: 0.2 },
-    // Section fader rides in dB at global times, pre-compressor: quiet egg, hushed pupa, full drop,
-    // hushed winter, and an ending level that meets the opening level at the loop seam.
-    // Per film: section fader rides in dB at global times, pre-compressor (see reference/music.md).
-    ride: [[0, 0]],
+    // Section fader rides in dB at global times, pre-compressor: full level throughout (an ad), and
+    // the end-card chord's tail faded out so it rings out cleanly by 15.0 s.
+    ride: [[0, 0], [14.76, 0], [14.99, -36]],
   };
 
   // ---------------------------------------------------------------- pitch
@@ -1268,6 +1267,323 @@
       I.nz(t0, len, { type: 'bandpass', q: 0.45, f, type2: 'lowpass', f2: o.lp || 2600, amp, stereo: true, sustain: true, bus: 'amb', key: 'wind' });
     };
 
+
+    // Taiko / timpani-ish drum: a pitch-dropping body, an inharmonic overtone, skin and stick.
+    I.taiko = (t, vel, f, o) => {
+      o = o || {};
+      f = f || 70;
+      const dec = o.dec || 0.8;
+      const V = E.voice(t, dec + 0.05, false);
+      if (!V) return;
+      const s = E.osc('sine', f * 1.8);
+      V.env(s.frequency, [[0, f * 1.8], [0.03, f, 'exp'], [dec, f * 0.85, 'exp']]);
+      const g = E.gain(0);
+      V.env(g.gain, [[0, 0], [0.002, vel], [0.12, vel * 0.6, 'exp'], [dec, FLOOR, 'exp']]);
+      s.connect(g);
+      E.out(g, 'drums', { room: 0.3, hall: o.hall || 0.12 });
+      V.osc(s);
+      const s2 = E.osc('sine', f * 2.6);
+      V.env(s2.frequency, [[0, f * 3.2], [0.03, f * 2.6, 'exp']]);
+      const g2 = E.gain(0);
+      V.env(g2.gain, perc(vel * 0.35, 0.002, dec * 0.3));
+      s2.connect(g2);
+      E.out(g2, 'drums', { room: 0.3 });
+      V.osc(s2, dec * 0.3 + 0.02);
+      const n = E.noise(V, ['taiko', t, f]);
+      const nf = E.filt('bandpass', o.skin || 1800, 0.8);
+      const ng = E.gain(0);
+      V.env(ng.gain, perc(vel * 0.45, 0.001, 0.03));
+      n.connect(nf);
+      nf.connect(ng);
+      E.out(ng, 'drums', { room: 0.4, hall: o.hall || 0.12 });
+    };
+
+    I.snare = (t, vel, o) => {
+      o = o || {};
+      vel *= 0.75;
+      const dec = o.dec || 0.17;
+      const V = E.voice(t, dec + 0.03, false);
+      if (!V) return;
+      const tri = E.osc('triangle', 210);
+      V.env(tri.frequency, [[0, 240], [0.03, 180, 'exp']]);
+      const tg = E.gain(0);
+      V.env(tg.gain, perc(vel * 0.55, 0.001, 0.07));
+      tri.connect(tg);
+      E.out(tg, 'drums', { room: 0.2 });
+      V.osc(tri, 0.1);
+      const n = E.noise(V, ['snare', t]);
+      const hp = E.filt('highpass', o.hp || 1300, 0.7);
+      const pk = E.filt('peaking', 4200, 1);
+      pk.gain.value = 4;
+      const g = E.gain(0);
+      V.env(g.gain, [[0, 0], [0.001, vel], [0.03, vel * 0.5, 'exp'], [dec, FLOOR, 'exp']]);
+      n.connect(hp);
+      hp.connect(pk);
+      pk.connect(g);
+      E.out(g, 'drums', { room: o.room || 0.22, pan: 0.05 });
+    };
+
+    // Hand clap: three fast band-passed noise spikes and a short tail.
+    I.clap = (t, vel, o) => {
+      o = o || {};
+      const V = E.voice(t, 0.2, false);
+      if (!V) return;
+      const n = E.noise(V, ['clap', t]);
+      const bp = E.filt('bandpass', o.f || 1250, 1.3);
+      const g = E.gain(0);
+      V.env(g.gain, [[0, 0], [0.001, vel], [0.009, vel * 0.25, 'exp'], [0.0105, vel * 0.9, 'lin'], [0.019, vel * 0.25, 'exp'], [0.0205, vel, 'lin'], [0.18, FLOOR, 'exp']]);
+      n.connect(bp);
+      bp.connect(g);
+      E.out(g, 'perc', { room: 0.3, pan: o.pan || 0 });
+    };
+
+    // Cajon: bass tone or slap.
+    I.cajon = (t, vel, slap) => {
+      const V = E.voice(t, 0.26, false);
+      if (!V) return;
+      if (!slap) {
+        const s = E.osc('sine', 130);
+        V.env(s.frequency, [[0, 130], [0.03, 72, 'exp']]);
+        const g = E.gain(0);
+        V.env(g.gain, perc(vel, 0.002, 0.2));
+        s.connect(g);
+        E.out(g, 'drums', { room: 0.25 });
+        V.osc(s);
+        const n = E.noise(V, ['caj', t]);
+        const f = E.filt('lowpass', 900, 0.7);
+        const ng = E.gain(0);
+        V.env(ng.gain, perc(vel * 0.4, 0.001, 0.025));
+        n.connect(f);
+        f.connect(ng);
+        E.out(ng, 'drums');
+      } else {
+        const n = E.noise(V, ['cajs', t]);
+        const f = E.filt('bandpass', 2600, 0.7);
+        const ng = E.gain(0);
+        V.env(ng.gain, [[0, 0], [0.001, vel], [0.02, vel * 0.4, 'exp'], [0.16, FLOOR, 'exp']]);
+        n.connect(f);
+        f.connect(ng);
+        E.out(ng, 'perc', { room: 0.25 });
+        const s = E.osc('sine', 260);
+        const g = E.gain(0);
+        V.env(g.gain, perc(vel * 0.45, 0.001, 0.05));
+        s.connect(g);
+        E.out(g, 'drums');
+        V.osc(s, 0.1);
+      }
+    };
+
+    // Brass section stab: brass saws per note with a pitch scoop and a fast filter bloom.
+    I.brass = (t, notes, len, vel, o) => {
+      o = o || {};
+      const rel = o.rel || 0.14;
+      const V = E.voice(t, len + rel + 0.02, false);
+      if (!V) return;
+      const top = o.bright || 4200;
+      const lp = E.filt('lowpass', 600, 1.1);
+      V.env(lp.frequency, [[0, 600], [0.03, top, 'exp'], [len, top * 0.4, 'exp'], [len + rel, 500, 'exp']]);
+      const g = E.gain(0);
+      V.env(g.gain, [[0, 0], [0.006, vel], [0.09, vel * 0.62, 'exp'], [len, vel * 0.5, 'lin'], [len + rel, 0, 'lin']]);
+      lp.connect(g);
+      E.out(g, o.bus || 'lead', Object.assign({ hall: 0.18, room: 0.1 }, o));
+      const per = 0.6 / Math.sqrt(notes.length);
+      for (const nm of notes) {
+        const f = hz(nm);
+        for (const d of [-8, 8]) {
+          const s = E.osc(E.brassSaw, f);
+          s.detune.value = d;
+          V.env(s.frequency, [[0, f * 0.96], [0.04, f, 'exp']]);
+          const sg = E.gain(per);
+          s.connect(sg);
+          sg.connect(lp);
+          V.osc(s);
+        }
+      }
+    };
+
+    // Funk / synth bass: warm saw through a resonant plucked filter, plus a sine body.
+    I.bass = (t, note, len, vel, o) => {
+      o = o || {};
+      const f = hz(note);
+      const V = E.voice(t, len + 0.06, false);
+      if (!V) return;
+      const lp = E.filt('lowpass', 300, o.q || 2.5);
+      const top = Math.min(4000, f * (o.bright || 12));
+      V.env(lp.frequency, [[0, top], [0.09, Math.max(160, f * 3), 'exp'], [len + 0.05, Math.max(120, f * 2), 'exp']]);
+      const g = E.gain(0);
+      V.env(g.gain, [[0, 0], [0.004, vel], [0.08, vel * 0.7, 'exp'], [len, vel * 0.55, 'lin'], [len + 0.05, 0, 'lin']]);
+      const a = E.osc(E.warmSaw, f);
+      const s = E.osc('sine', f);
+      const sg = E.gain(0.7);
+      a.connect(lp);
+      lp.connect(g);
+      s.connect(sg);
+      sg.connect(g);
+      E.out(g, 'bass', o);
+      V.osc(a);
+      V.osc(s);
+    };
+
+    // Crunch: a dense front-loaded crackle of clicks, a torn noise band and a woody knock.
+    I.crunch = (t, vel, key) => {
+      I.play(
+        t,
+        0.32,
+        () => grainBuffer(ctx, ['crunch', key], 0.32, clickGrains(lib.rng(lib.hash('film-crunch', key)), 0, 0.28, 170, { amp: 0.5, f0: 1200, f1: 6500, shape: 1.7, q: 1.4, dec: 0.0025 })),
+        vel,
+        { bus: 'sfx', room: 0.15, sustain: false }
+      );
+      I.nz(t, 0.24, {
+        type: 'bandpass',
+        q: 0.8,
+        f: [[0, 3200], [0.22, 1000, 'exp']],
+        amp: [[0, 0], [0.002, vel * 0.8], [0.035, vel * 0.35, 'exp'], [0.07, vel * 0.5, 'lin'], [0.11, vel * 0.2, 'exp'], [0.14, vel * 0.4, 'lin'], [0.24, FLOOR, 'exp']],
+        key: 'crunch' + key,
+        room: 0.15,
+      });
+      I.tock(t, vel * 0.6, 210, { bus: 'sfx' });
+    };
+
+
+    // Cartoon spring boing: a triangle whose pitch wobbles fast and settles, bending up.
+    I.boing = (t, vel, o) => {
+      o = o || {};
+      const f = o.f || 190;
+      const len = o.len || 0.42;
+      const V = E.voice(t, len + 0.03, false);
+      if (!V) return;
+      const s = E.osc('triangle', f);
+      V.env(s.frequency, [[0, f * 0.7], [0.03, f, 'exp'], [len, f * (o.bend || 1.5), 'exp']]);
+      const lfo = E.osc('sine', o.rate || 17);
+      const lg = E.gain(0);
+      V.env(lg.gain, [[0, f * 0.45], [len, f * 0.02, 'exp']]);
+      lfo.connect(lg);
+      lg.connect(s.frequency);
+      const lp = E.filt('lowpass', 2600, 1.2);
+      const g = E.gain(0);
+      V.env(g.gain, [[0, 0], [0.004, vel], [0.08, vel * 0.7, 'exp'], [len, FLOOR, 'exp']]);
+      s.connect(lp);
+      lp.connect(g);
+      E.out(g, 'sfx', { room: 0.15, pan: o.pan || 0 });
+      V.osc(s);
+      V.osc(lfo);
+    };
+
+    // Cartoon punch: a short low body thump, a cracking noise snap and a high slap.
+    I.punch = (t, vel, o) => {
+      o = o || {};
+      const V = E.voice(t, 0.3, false);
+      if (!V) return;
+      const f = o.f || 140;
+      const s = E.osc('sine', f);
+      V.env(s.frequency, [[0, f * 1.6], [0.04, f * 0.55, 'exp'], [0.25, f * 0.45, 'exp']]);
+      const g = E.gain(0);
+      V.env(g.gain, [[0, 0], [0.002, vel], [0.05, vel * 0.5, 'exp'], [0.26, FLOOR, 'exp']]);
+      s.connect(g);
+      E.out(g, 'sfx', { pan: o.pan || 0 });
+      V.osc(s);
+      I.nz(t, 0.16, { type: 'bandpass', q: 0.9, f: [[0, o.snap || 2400], [0.14, 900, 'exp']], amp: [[0, 0], [0.001, vel * 0.9], [0.02, vel * 0.35, 'exp'], [0.16, FLOOR, 'exp']], pan: o.pan || 0, room: 0.25, key: 'punch' });
+      I.nz(t, 0.04, { type: 'highpass', q: 0.7, f: [[0, 5000]], amp: perc(vel * 0.5, 0.0005, 0.012), pan: o.pan || 0, key: 'slap' });
+    };
+
+    // CHOMP: teeth clack, a gnashing low saw "gnam", and a crunch of crumbs.
+    I.chomp = (t, vel, key, o) => {
+      o = o || {};
+      I.tock(t, vel * 0.9, 1100, { bus: 'sfx', dec: 0.04 });
+      I.tock(t + 0.012, vel * 0.6, 760, { bus: 'sfx', dec: 0.05 });
+      I.crunch(t, vel * 0.55, key);
+      const V = E.voice(t, 0.26, false);
+      if (!V) return;
+      const f0 = o.f || 150;
+      const s = E.osc('sawtooth', f0);
+      V.env(s.frequency, [[0, f0 * 1.4], [0.05, f0, 'exp'], [0.22, f0 * 0.6, 'exp']]);
+      const bp = E.filt('bandpass', 900, 1.4);
+      V.env(bp.frequency, [[0, 1300], [0.22, 500, 'exp']]);
+      const lp = E.filt('lowpass', 420, 0.7);
+      const g = E.gain(0);
+      V.env(g.gain, [[0, 0], [0.003, vel * 1.4], [0.05, vel * 0.8, 'exp'], [0.22, FLOOR, 'exp']]);
+      s.connect(bp);
+      s.connect(lp);
+      bp.connect(g);
+      lp.connect(g);
+      E.out(g, 'sfx', { room: 0.2, pan: o.pan || 0 });
+      V.osc(s);
+    };
+
+    // Slide whistle: a breathy sine with vibrato sliding along a pitch contour pts [[dt, hz, shape]].
+    I.slide = (t, len, pts, vel, o) => {
+      o = o || {};
+      const V = E.voice(t, len + 0.04, false);
+      if (!V) return;
+      const s = E.osc('sine', pts[0][1]);
+      V.env(s.frequency, pts);
+      const lfo = E.osc('sine', 6.5);
+      const lg = E.gain(pts[0][1] * 0.02);
+      lfo.connect(lg);
+      lg.connect(s.frequency);
+      const g = E.gain(0);
+      V.env(g.gain, [[0, 0], [0.02, vel], [len * 0.8, vel * 0.8, 'lin'], [len, FLOOR, 'exp']]);
+      s.connect(g);
+      E.out(g, 'sfx', { room: 0.2, hall: 0.1, pan: o.pan || 0 });
+      V.osc(s);
+      V.osc(lfo);
+      I.nz(t, len, { type: 'bandpass', q: 3, f: pts.map(([d, f, sh]) => [d, f * 2, sh]), amp: [[0, 0], [0.02, vel * 0.25], [len, FLOOR, 'exp']], pan: o.pan || 0, key: 'slide' });
+    };
+
+    // Swoosh: band-passed stereo noise with a fast attack, a filter sweep and a pan sweep.
+    I.swoosh = (t, len, vel, o) => {
+      o = o || {};
+      I.nz(t, len, {
+        type: 'bandpass',
+        q: o.q || 1.0,
+        f: [[0, o.f0 || 900], [len * (o.pk || 0.25), o.fp || 3800, 'exp'], [len, o.f1 || 500, 'exp']],
+        amp: [[0, 0], [o.att || 0.004, vel * 0.85], [len * (o.pk || 0.25), vel, 'lin'], [len, FLOOR, 'exp']],
+        panEnv: o.pan ? [[0, o.pan[0]], [len, o.pan[1], 'lin']] : null,
+        stereo: true,
+        room: 0.12,
+        hall: o.hall || 0.06,
+        key: o.key || 'swoosh',
+      });
+    };
+
+    // Notification ping: a soft two-partial FM ding with a tiny attack click.
+    I.ping = (t, f, vel, o) => {
+      o = o || {};
+      I.fmBell(t, f, vel, { ratio: 2, index: 0.7, dec: o.dec || 0.45, bus: 'sfx', room: 0.15, delay: 0.05, pan: o.pan || 0 });
+      I.glass(t, f * 2, vel * 0.25, { dec: 0.25, bus: 'sfx', pan: o.pan || 0 });
+    };
+
+    // Pop: a cork-like rising blip and a sharp noise crack.
+    I.pop = (t, vel, o) => {
+      o = o || {};
+      I.plip(t, o.f0 || 380, o.f1 || 1500, vel, { pan: o.pan || 0 });
+      I.nz(t, 0.05, { type: 'highpass', q: 0.7, f: [[0, 2800]], amp: perc(vel * 0.8, 0.0006, 0.018), pan: o.pan || 0, room: 0.2, key: 'pop' });
+    };
+
+    // Crowd-cheer synth: wide noise through two vowel formants swelling "ye-aah", with a flutter.
+    I.cheer = (t, len, vel) => {
+      for (const [fa, fb, q, a, k] of [[700, 1100, 1.6, 1, 'c1'], [1700, 2500, 2.2, 0.6, 'c2'], [3000, 3600, 2.5, 0.3, 'c3']]) {
+        I.nz(t, len, {
+          type: 'bandpass',
+          q,
+          f: [[0, fa], [len * 0.3, fb, 'exp'], [len, fa * 0.9, 'exp']],
+          amp: [[0, 0], [0.01, vel * a * 0.7], [0.15, vel * a, 'lin'], [len, FLOOR, 'exp']],
+          stereo: true,
+          hall: 0.25,
+          key: k,
+        });
+      }
+    };
+
+    // Sparkle: a seeded flurry of short high tings over len seconds, drawn from notes.
+    I.sparkle = (t, len, notes, n, vel, key) => {
+      const r = E.rng('sparkle', key);
+      for (let i = 0; i < n; i++) {
+        const dt = (i / n) * len + r() * (len / n) * 0.6;
+        const nm = notes[Math.floor(r() * notes.length)];
+        I.glock(t + dt, hz(nm), vel * (1 - (0.5 * i) / n), { dec: 0.6, pan: r() * 1.4 - 0.7, hall: 0.2, delay: 0.08 });
+      }
+    };
     return I;
   }
 
@@ -1309,33 +1625,344 @@
   }
 
   // ---------------------------------------------------------------- the score
-  // DEMO SCORE — replace wholesale when composing the film. It gives the stub pass a pulse and
-  // shows the engine idiom: instruments take absolute global times, score() is re-invoked per bar
-  // and the engine windows each call, so scheduling the whole piece here is correct. Everything
-  // below derives from FILM.TIMELINE, so it runs at any bpm and duration.
+  // "Time vs биржа". 144 bpm, 4/4: a beat is 0.4167 s, a 16th 0.1042 s, a bar 1.6667 s, 9 bars.
+  // The fight sits in A minor (Am | F | G | E, a fighting-game loop); LiquidityScan lifts it to
+  // F major and the end card lands home in C major.
+  //   bar 1  VS intro: whoosh + fight drum, VS slam, caption pops, FIGHT! gong + cheer, leap-up whistle
+  //   bar 2  Round 1 (Am): groove in (bouncy bass, claps, marimba hook); boing, shove, punch, fly-off
+  //   bar 3  Round 2 (F): crash + slide whistle down, three CHOMPs, the timer ratchets
+  //   bar 4  Round 3 (G): whip swish, a tab pop on every 8th, frantic clock ticks
+  //   bar 5  Round 4 (E): notification pings on 8ths, uppercut BAM, a riser into the flash
+  //   bar 6-7 Final round (Am, F-E): taiko drums, brass stabs, crown flips; the brawl as a rolling
+  //          tom fill with POW/BAM/WHAM; the last beat cuts to a rising scan shimmer
+  //   bar 8  LiquidityScan (Fmaj9): bright chord + sparkle, lock-on beep, refill chime, confetti pop
+  //   bar 9  End card (C): logo sting, URL pop, rings out by 15.0 s
   const CH = {
-    home: ['D3', 'A3', 'D4', 'F#4'],
-    away: ['G3', 'B3', 'D4', 'G4'],
+    Am: ['A3', 'C4', 'E4', 'A4'],
+    F: ['F3', 'A3', 'C4', 'F4'],
+    G: ['G3', 'B3', 'D4', 'G4'],
+    E: ['E3', 'G#3', 'B3', 'E4'],
+    Fmaj9: ['F3', 'C4', 'E4', 'G4', 'A4'],
+    C: ['C4', 'E4', 'G4', 'C5'],
+    C69: ['C4', 'E4', 'G4', 'A4', 'D5'],
   };
+  // marimba hook per chord, [16th, note]
+  const HOOK = {
+    Am: [[0, 'A4'], [2, 'C5'], [3, 'E5'], [6, 'A5'], [8, 'G5'], [10, 'E5'], [11, 'D5'], [14, 'E5']],
+    F: [[0, 'A4'], [2, 'C5'], [3, 'F5'], [6, 'A5'], [8, 'G5'], [10, 'F5'], [11, 'E5'], [14, 'C5']],
+    G: [[0, 'B4'], [2, 'D5'], [3, 'G5'], [6, 'B5'], [8, 'A5'], [10, 'G5'], [11, 'D5'], [14, 'B4']],
+    E: [[0, 'G#4'], [2, 'B4'], [3, 'E5'], [6, 'G#5'], [8, 'B5'], [10, 'A5'], [11, 'G#5'], [14, 'E5']],
+    Fmaj: [[0, 'C5'], [2, 'F5'], [3, 'A5'], [6, 'C6'], [8, 'A5'], [10, 'G5'], [11, 'F5'], [14, 'G5']],
+  };
+  const ROOT = { Am: ['A1', 'A2', 'E2'], F: ['F1', 'F2', 'C2'], G: ['G1', 'G2', 'D2'], E: ['E1', 'E2', 'B1'], Fmaj9: ['F1', 'F2', 'C2'], C: ['C2', 'C3', 'G2'] };
 
   function score(E, I) {
-    const { kick, hat, kalimba, pad, sub } = I;
-    const bpm = (FILM.TIMELINE && FILM.TIMELINE.bpm) || 120;
-    const DUR = (FILM.TIMELINE && FILM.TIMELINE.duration) || 32;
-    const BAR = 240 / bpm;
-    const BEAT = 60 / bpm;
-    const motif = ['D5', 'F#5', 'A5', 'E5'];
-    for (let beat = 0; beat * BEAT < DUR - 1e-9; beat++) {
-      const t = Math.round(beat * BEAT * 1000) / 1000;
-      const down = beat % 4 === 0;
-      kick(t, down ? 0.8 : 0.5, down ? 'full' : 'felt');
-      hat(t + BEAT / 2, 0.1);
-      kalimba(t + BEAT / 2, hz(motif[beat % 4]), 0.2, { hall: 0.15, delay: 0.1, pan: beat % 2 ? 0.15 : -0.15 });
-      if (down) {
-        const home = beat % 8 === 0;
-        pad(t, Math.min(t + BAR, DUR), home ? CH.home : CH.away, 0.28, { att: 0.05, rel: 0.1, cut0: 900, cut1: 1400, hall: 0.15 });
-        sub(t, Math.min(t + BAR, DUR), home ? 'D2' : 'G1', 0.4, { att: 0.02, rel: 0.08 });
+    const { kick, hat, crash, tock, marimba, glock, glass, gong, ting, pad, subDrop, pluck, nz, revSwell, shaker } = I;
+    const { taiko, snare, clap, brass, bass, boing, punch, chomp, slide, swoosh, ping, pop, cheer, sparkle, bleep } = I;
+    const BT = 60 / 144;
+    const BR = 4 * BT;
+    const S = BT / 4;
+    const B = (n) => n * BR;
+    const at = (bar, beat, s16) => B(bar) + (beat || 0) * BT + (s16 || 0) * S;
+
+    // ---- shared gestures
+    const bigHit = (t, v, o) => {
+      o = o || {};
+      kick(t, v, 'full');
+      taiko(t, v * 0.8, o.f || 55, { dec: 0.9, hall: 0.2 });
+      crash(t, 0.4 * v, { dec: o.dec || 1.3 });
+      if (o.drop !== false) subDrop(t, 120, 40, 0.6, 0.6 * v);
+      E.duck(t, 0.7);
+    };
+    // groove: four on the floor, claps on 2 and 4, offbeat hats, 16th shaker, bouncy octave bass
+    const groove = (bar, chord, o) => {
+      o = o || {};
+      const v = o.v || 1;
+      for (let b = 0; b < 4; b++) {
+        if (o.skipBeat && o.skipBeat.includes(b)) continue;
+        const t = at(bar, b);
+        kick(t, (b === 0 ? 0.85 : 0.72) * v, 'full');
+        E.duck(t, 0.55);
+        if (b % 2) {
+          clap(t, 0.5 * v, { pan: 0.05 });
+          snare(t, 0.35 * v, { room: 0.18 });
+        }
+        hat(t + BT / 2, 0.16 * v, b === 3 && o.openHat);
+        for (const s of [1, 3]) shaker(t + s * S, 0.07 * v, s === 1 ? 0.35 : -0.3);
       }
+      if (o.bass !== false) {
+        const [lo, hi, fifth] = ROOT[chord];
+        const pat = [[0, lo, 0.16], [3, hi, 0.09], [4, lo, 0.09], [6, hi, 0.09], [8, lo, 0.16], [10, fifth, 0.09], [11, hi, 0.09], [14, hi, 0.09]];
+        for (const [s, n, len] of pat) {
+          if (o.skipBeat && o.skipBeat.includes(Math.floor(s / 4))) continue;
+          bass(at(bar, 0, s), n, len, (s % 4 ? 0.8 : 1) * v, { bright: 10 });
+        }
+      }
+      if (o.hook !== false && HOOK[o.hookKey || chord]) {
+        for (const [s, n] of HOOK[o.hookKey || chord]) {
+          if (o.skipBeat && o.skipBeat.includes(Math.floor(s / 4))) continue;
+          marimba(at(bar, 0, s), hz(n), (o.hookV || 0.32) * (s % 4 ? 0.85 : 1), { pan: s % 8 < 4 ? -0.18 : 0.18, room: 0.15, delay: 0.06 });
+        }
+      }
+      if (o.pad !== false && CH[chord]) pad(B(bar), B(bar + 1) - 0.02, CH[chord], 0.12 * v, { att: 0.02, rel: 0.06, cut0: 1600, cut1: 900, hall: 0.1 });
+    };
+
+    // ================= bar 0: VS intro (0 - 1.667)
+    {
+      // downbeat: whoosh in from both sides + fighting-game drum hit
+      bigHit(0, 0.95, { f: 60, drop: false });
+      swoosh(0, 0.42, 0.45, { f0: 1500, fp: 4200, f1: 600, pan: [-0.8, -0.2], pk: 0.15, key: 'in-l' });
+      swoosh(0, 0.42, 0.45, { f0: 1300, fp: 3600, f1: 500, pan: [0.8, 0.2], pk: 0.15, key: 'in-r' });
+      brass(0, CH.Am, 0.18, 0.4);
+      // 16th taiko pickup into the VS slam
+      taiko(at(0, 0, 2), 0.35, 90, { dec: 0.3 });
+      taiko(at(0, 0, 3), 0.45, 80, { dec: 0.3 });
+      // VS slam (beat 2): the biggest hit of the intro
+      const vs = at(0, 1);
+      bigHit(vs, 1.0, { f: 48 });
+      punch(vs, 0.55, { f: 110 });
+      brass(vs, ['A2', 'E3', 'A3', 'C4', 'E4'], 0.3, 0.55, { bright: 5200 });
+      nz(vs, 0.3, { type: 'highpass', q: 0.7, f: [[0, 3000], [0.3, 6000, 'exp']], amp: [[0, 0], [0.001, 0.35], [0.3, FLOOR, 'exp']], stereo: true, room: 0.3, key: 'flash' });
+      hat(at(0, 1, 2), 0.14);
+      hat(at(0, 2, 2), 0.14);
+      // caption pops on beat 3: kinetic letters as quick marimba blips
+      const cap = at(0, 2);
+      kick(cap, 0.6, 'thud');
+      ['A5', 'C6', 'E6', 'A6'].forEach((n, i) => marimba(cap + i * (S / 2), hz(n), 0.22, { dec: 0.3, pan: -0.3 + i * 0.2 }));
+      clap(cap, 0.35);
+      // snare roll into FIGHT!
+      for (let i = 0; i < 4; i++) snare(at(0, 2, 2) + i * (S / 2), 0.18 + i * 0.06);
+      // FIGHT! (beat 4): gong, crash, brass, crowd-cheer synth, confetti pops
+      const fight = at(0, 3);
+      bigHit(fight, 1.0, { f: 52, dec: 1.6 });
+      gong(fight, hz('A2'), 0.45, { dec: 1.8, hall: 0.25 });
+      brass(fight, ['A3', 'C4', 'E4', 'A4'], 0.16, 0.5, { bright: 5600 });
+      cheer(fight, 1.0, 0.22);
+      pop(fight + S, 0.2, { pan: -0.5 });
+      pop(fight + S * 1.5, 0.18, { pan: 0.5, f0: 500, f1: 1900 });
+      // exit: both logos squash and leap up out of the top
+      slide(B(1) - 0.2, 0.22, [[0, 500], [0.2, 1700, 'exp']], 0.22, {});
+      swoosh(B(1) - 0.16, 0.2, 0.3, { f0: 600, fp: 3000, f1: 2000, pk: 0.8, key: 'leap' });
+    }
+
+    // ================= bar 1: Round 1, the home screen (Am)
+    {
+      groove(1, 'Am');
+      crash(B(1), 0.35, { dec: 1.2 });
+      // landing boing (beat 2)
+      boing(at(1, 1), 0.38, { f: 180, pan: -0.15 });
+      boing(at(1, 1) + 0.03, 0.22, { f: 260, pan: 0.2 });
+      // shove thump (beat 3): body check, "99+" badge blip
+      const shove = at(1, 2);
+      punch(shove, 0.55, { f: 95, snap: 900 });
+      subDrop(shove, 90, 45, 0.3, 0.45);
+      ping(shove + S * 1.5, hz('E6'), 0.14, { pan: 0.4 });
+      // punch (beat 4): glove jab, биржа spins
+      const p = at(1, 3);
+      punch(p, 0.8, { f: 150, snap: 3000, pan: -0.2 });
+      // exit kick: Time flies off right, spinning
+      punch(at(1, 3, 2), 0.45, { f: 120, pan: 0.3 });
+      swoosh(at(1, 3, 2) + 0.01, 0.2, 0.42, { f0: 700, fp: 3200, f1: 1200, pan: [0, 0.95], pk: 0.4, key: 'flyoff' });
+      for (let i = 0; i < 3; i++) tock(at(1, 3, 2) + 0.03 + i * 0.05, 0.08, 1800 + i * 300, { pan: 0.5 + i * 0.15 });
+    }
+
+    // ================= bar 2: Round 2, the chart eats your time (F)
+    {
+      groove(2, 'F', { hookV: 0.24 });
+      // crash into the chart, slide whistle falling out
+      const c = B(2);
+      crash(c, 0.35, { dec: 1.0 });
+      punch(c, 0.6, { f: 100, snap: 1600, pan: -0.4 });
+      I.crunch(c, 0.3, 'crash-in');
+      slide(c + 0.02, 0.36, [[0, 1500], [0.34, 420, 'exp']], 0.2, { pan: -0.2 });
+      // three CHOMPs on beats 2, 3, 4, each a little lower and bigger; the timer ratchets in between
+      for (let k = 0; k < 3; k++) {
+        const t = at(2, k + 1);
+        chomp(t, 0.6 + k * 0.12, 'chomp' + k, { f: 170 - k * 25, pan: 0.15 });
+        E.duck(t, 0.5);
+        for (let i = 1; i < 4; i++) tock(t + i * (S * 0.75), 0.06 + 0.01 * k, 2600 - i * 200, { pan: 0.35 });
+      }
+      // last beat: building into the whip pan
+      swoosh(at(2, 3, 2), 0.2, 0.18, { f0: 500, fp: 1800, f1: 2600, pk: 0.95, pan: [0.6, 0.9], key: 'prewhip' });
+    }
+
+    // ================= bar 3: Round 3, tab overload (G)
+    {
+      groove(3, 'G', { hookV: 0.26 });
+      // whip-pan swish on the cut
+      swoosh(B(3), 0.32, 0.65, { f0: 2400, fp: 5200, f1: 500, pan: [0.9, -0.9], pk: 0.08, att: 0.002, key: 'whip' });
+      // a tab pops on every 8th, climbing
+      const tabs = ['B5', 'D6', 'E6', 'G6', 'A6', 'B6', 'D7', 'E7'];
+      tabs.forEach((n, i) => {
+        const t = at(3, 0, i * 2);
+        I.plip(t, hz(n) * 0.5, hz(n), 0.12 + i * 0.01, { pan: -0.5 + (i % 4) * 0.33 });
+        tock(t, 0.06, 2400, { pan: 0.3 });
+      });
+      // the spinner / Time's hands: fast clock ticks, tick-tock pitch pairs
+      for (let i = 0; i < 24; i++) tock(at(3, 0, 0) + i * (S * 0.667) + S * 0.33, 0.035, i % 2 ? 3400 : 2700, { pan: i % 2 ? 0.4 : -0.4 });
+      // exit: the fast zoom into Time's face
+      swoosh(B(4) - 0.25, 0.25, 0.3, { f0: 400, fp: 900, f1: 3500, pk: 0.9, key: 'zoom' });
+    }
+
+    // ================= bar 4: Round 4, notification storm (E)
+    {
+      groove(4, 'E', { hook: false, openHat: true });
+      // pings on 8ths until the uppercut, each a new notification sliding in
+      const pings = ['E6', 'G#6', 'B6', 'E6', 'G#6', 'B6'];
+      pings.forEach((n, i) => ping(at(4, 0, i * 2), hz(n), 0.24, { pan: i % 2 ? 0.25 : -0.25 }));
+      // Time's own notifications shoved off the bottom
+      I.glide(at(4, 1, 1), 900, 300, 0.2, 0.06, { pan: -0.3 });
+      I.glide(at(4, 2, 1), 800, 260, 0.2, 0.06, { pan: 0.3 });
+      // uppercut BAM (beat 4)
+      const bam = at(4, 3);
+      I.slide(bam - 0.12, 0.12, [[0, 300], [0.12, 1100, 'exp']], 0.12, {});
+      bigHit(bam, 1.0, { f: 50 });
+      punch(bam, 0.9, { f: 130, snap: 2600 });
+      brass(bam, ['E3', 'B3', 'E4', 'G#4'], 0.2, 0.5, { bright: 5200 });
+      // notifications flying apart
+      for (let i = 0; i < 5; i++) ping(bam + 0.06 + i * 0.045, hz(['B6', 'E7', 'G#6', 'D7', 'B6'][i]), 0.06, { pan: -0.8 + i * 0.4, dec: 0.2 });
+      // into the white flash
+      revSwell(B(5) - 0.3, 0.3, 0.3, { hi: true });
+    }
+
+    // ================= bars 5-6: the final round, the #1 spot (Am, then F - E)
+    {
+      // big drums, brass stab
+      const fr = B(5);
+      bigHit(fr, 1.0, { f: 48, dec: 1.6 });
+      brass(fr, ['A2', 'E3', 'A3', 'C4', 'E4'], 0.38, 0.6, { bright: 5600 });
+      groove(5, 'Am', { hook: false, v: 0.95, skipBeat: [3] });
+      // brass riff answering
+      brass(at(5, 1, 2), ['C4', 'E4', 'A4'], 0.1, 0.38);
+      brass(at(5, 2), ['B3', 'D4', 'G4'], 0.14, 0.4);
+      // crown flips on beats 2 and 3: a coin ting and a whip
+      for (const b of [1, 2]) {
+        ting(at(5, b), hz(b === 1 ? 'E6' : 'A6'), 0.2, { pan: b === 1 ? 0.4 : -0.4 });
+        taiko(at(5, b), 0.55, 70, { dec: 0.5 });
+      }
+      // marimba hook in half-time over the tug of war
+      for (const [s, n] of HOOK.Am.slice(0, 6)) marimba(at(5, 0, s), hz(n), 0.24, { pan: 0.15, room: 0.15 });
+
+      // the brawl: a rolling 16th tom fill from beat 4 of bar 5 to beat 4 of bar 6, impacts on beats
+      const b0 = at(5, 3);
+      const b1 = B(7) - BT;
+      const toms = [150, 120, 95, 75];
+      const r = E.rng('brawl');
+      const rr = [];
+      for (let i = 0; i * S < b1 - b0 - 1e-6; i++) rr.push([r(), r(), r()]);
+      for (let i = 0; i * S < b1 - b0 - 1e-6; i++) {
+        const t = b0 + i * S;
+        const onBeat = i % 4 === 0;
+        taiko(t, onBeat ? 0.85 : 0.38 + 0.18 * rr[i][0], toms[i % 4] * (onBeat ? 0.6 : 1), { dec: onBeat ? 0.7 : 0.3, hall: 0.1 });
+        if (i % 2 === 1) snare(t, 0.16 + 0.1 * rr[i][1]);
+        // random comic debris: boings, bonks, little pops between the beats
+        if (!onBeat && rr[i][2] < 0.28) {
+          const k = Math.floor(rr[i][1] * 3);
+          if (k === 0) boing(t, 0.15, { f: 220 + 160 * rr[i][0], len: 0.25, pan: rr[i][0] * 1.4 - 0.7 });
+          else if (k === 1) tock(t, 0.18, 600 + 900 * rr[i][0], { pan: rr[i][0] * 1.4 - 0.7 });
+          else pop(t, 0.12, { pan: rr[i][0] * 1.4 - 0.7 });
+        }
+      }
+      // POW / BAM / WHAM on the beats
+      const hits = [b0, at(6, 0), at(6, 1), at(6, 2)];
+      hits.forEach((t, i) => {
+        kick(t, 0.9, 'full');
+        punch(t, 0.7, { f: 150 - i * 12, snap: 2200 + i * 300, pan: [0, -0.4, 0.4, 0][i] });
+        E.duck(t, 0.6);
+      });
+      crash(b0, 0.45, { dec: 1.4 });
+      crash(at(6, 0), 0.35, { dec: 1.2 });
+      cheer(b0, 0.9, 0.12);
+      // bar 6 harmony: F, then E on beat 3 with brass stabs, under the brawl
+      const [flo, fhi] = ROOT.F;
+      const [elo, ehi] = ROOT.E;
+      [[0, flo], [3, fhi], [4, flo], [6, fhi]].forEach(([s, n]) => bass(at(6, 0, s), n, 0.09, s % 4 ? 0.8 : 1));
+      [[8, elo], [10, ehi], [11, elo]].forEach(([s, n]) => bass(at(6, 0, s), n, 0.09, s % 4 ? 0.8 : 1));
+      brass(at(6, 0), CH.F, 0.16, 0.42);
+      brass(at(6, 2), CH.E, 0.16, 0.45);
+      brass(at(6, 2, 3), ['G#3', 'B3', 'E4'], 0.08, 0.36);
+      pad(B(6), at(6, 2), CH.F, 0.1, { att: 0.02, rel: 0.05, cut0: 1500 });
+      pad(at(6, 2), at(6, 3) - 0.01, CH.E, 0.1, { att: 0.02, rel: 0.03, cut0: 1500 });
+      // music cuts: the scan beam sweeps down with a rising shimmer
+      const scan = at(6, 3);
+      glass(scan, hz('E6'), 0.32, { dec: 0.7, hall: 0.3 });
+      nz(scan, BT, {
+        type: 'highpass',
+        q: 0.7,
+        f: [[0, 2500], [BT, 9000, 'exp']],
+        amp: [[0, 0], [0.004, 0.08], [BT - 0.02, 0.3, 'exp'], [BT, FLOOR, 'lin']],
+        stereo: true,
+        hall: 0.2,
+        key: 'scan',
+      });
+      ['A5', 'C6', 'E6', 'G6', 'A6', 'C7', 'E7', 'G7'].forEach((n, i) => glass(scan + 0.02 + i * (BT / 8), hz(n), 0.08 + i * 0.015, { dec: 0.35, pan: -0.6 + i * 0.17, delay: 0.1 }));
+      I.glide(scan + 0.01, 400, 1600, BT - 0.04, 0.05, { bus: 'sfx', hall: 0.2 });
+    }
+
+    // ================= bar 7: LiquidityScan finds the entry (Fmaj9)
+    {
+      const ls = B(7);
+      // bright clean solution chord + sparkle
+      kick(ls, 0.85, 'full');
+      crash(ls, 0.3, { dec: 1.4 });
+      pad(ls, B(8) - 0.02, CH.Fmaj9, 0.2, { att: 0.01, rel: 0.05, cut0: 3200, cut1: 1600, hall: 0.25 });
+      pluck(ls, 'F4', 0.3, { dec: 0.6 });
+      ['C5', 'E5', 'G5', 'A5'].forEach((n, i) => pluck(ls + i * 0.012, n, 0.22, { dec: 0.7, hall: 0.2 }));
+      sparkle(ls, 0.5, ['C7', 'E7', 'G7', 'A7', 'F7'], 9, 0.13, 'ls');
+      glock(ls, hz('A6'), 0.3, { dec: 1.0 });
+      groove(7, 'Fmaj9', { hookKey: 'Fmaj', pad: false, v: 0.9, hookV: 0.26, skipBeat: [] });
+      // lock-on beep (beat 2): ENTRY FOUND
+      const lock = at(7, 1);
+      bleep(lock, hz('A6'), 0.35);
+      bleep(lock + S * 0.75, hz('A6'), 0.28);
+      bleep(lock + S * 1.5, hz('E7'), 0.3);
+      // time refill (beat 3): a rising chime
+      const refill = at(7, 2);
+      ['F5', 'A5', 'C6', 'E6', 'G6', 'A6', 'C7'].forEach((n, i) => glock(refill + i * (S / 2), hz(n), 0.2 + i * 0.02, { dec: 0.8, pan: -0.5 + i * 0.16 }));
+      I.glide(refill, 500, 2000, BT * 0.9, 0.05, { bus: 'sfx', hall: 0.15 });
+      // crown lands (beat 4): confetti pop
+      const crown = at(7, 3);
+      pop(crown, 0.45, { f0: 300, f1: 1400 });
+      ting(crown, hz('C7'), 0.22);
+      I.play(crown, 0.5, () => grainBuffer(E.ctx, 'confetti', 0.5, clickGrains(lib.rng(lib.hash('film-confetti')), 0.01, 0.45, 70, { amp: 0.25, f0: 3500, f1: 6000, shape: 1.6 })), 0.6, { bus: 'sfx', hall: 0.1, sustain: false });
+      // pickup into the end card
+      snare(at(7, 3, 2), 0.25);
+      snare(at(7, 3, 3), 0.35);
+    }
+
+    // ================= bar 8: end card, liquidityscan.io (C)
+    {
+      const end = B(8);
+      // the logo sting: big confident C, brass, bells
+      bigHit(end, 0.95, { f: 52, dec: 1.3 });
+      brass(end, ['C3', 'G3', 'C4', 'E4', 'G4'], 0.5, 0.55, { bright: 5200 });
+      ['C5', 'E5', 'G5', 'C6'].forEach((n, i) => glock(end + i * 0.03, hz(n), 0.24, { dec: 1.2 }));
+      pad(end, B(8) + 1.2, CH.C, 0.18, { att: 0.01, rel: 0.25, cut0: 2800, cut1: 1200, hall: 0.25 });
+      bass(end, 'C2', 0.3, 1.0);
+      // light groove under the wordmark and tagline
+      for (const b of [1, 2]) {
+        kick(at(8, b), 0.6, 'full');
+        E.duck(at(8, b), 0.4);
+        hat(at(8, b) - BT / 2, 0.12);
+      }
+      clap(at(8, 1), 0.4);
+      bass(at(8, 1), 'C3', 0.09, 0.7);
+      bass(at(8, 1, 2), 'G2', 0.09, 0.7);
+      bass(at(8, 2), 'E2', 0.09, 0.8);
+      bass(at(8, 2, 2), 'G2', 0.09, 0.8);
+      marimba(at(8, 1), hz('E5'), 0.26, { pan: -0.2 });
+      marimba(at(8, 1, 2), hz('G5'), 0.24, { pan: 0.2 });
+      marimba(at(8, 2), hz('A5'), 0.26, { pan: -0.2 });
+      marimba(at(8, 2, 2), hz('B5'), 0.24, { pan: 0.2 });
+      // URL pop (beat 4): the final chord, short and bright so it rings out by 15 s
+      const url = at(8, 3);
+      kick(url, 0.75, 'full');
+      clap(url, 0.4);
+      pop(url, 0.35, { f0: 450, f1: 1800 });
+      CH.C69.forEach((n, i) => pluck(url + i * 0.008, n, 0.2, { dec: 0.4 }));
+      marimba(url, hz('C6'), 0.32, { dec: 0.4 });
+      glock(url, hz('C7'), 0.2, { dec: 0.4 });
+      bass(url, 'C2', 0.2, 0.9);
     }
   }
 
