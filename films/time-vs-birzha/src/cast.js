@@ -144,7 +144,7 @@
         return;
       }
       if (face === 'dizzy') {
-        ctx.strokeStyle = ink; ctx.lineWidth = lw * 0.8;
+        ctx.strokeStyle = ink; ctx.lineWidth = Math.max(2.5, R * 0.024);
         ctx.beginPath();
         for (let k = 0; k <= 30; k++) { const a = k * 0.55 + t * 9 * sd, r = (k / 30) * rx * 1.05; ctx.lineTo(x + Math.cos(a) * r, ey + Math.sin(a) * r); }
         ctx.stroke();

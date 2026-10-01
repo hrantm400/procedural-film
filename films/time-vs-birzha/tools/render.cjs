@@ -15,7 +15,7 @@
 //   --crf N            x264 quality (default 16)   --preset p   x264 preset (default medium)
 //   --fixtures         use tools/fixtures instead of src
 //
-// Video: libx264, yuv420p (BT.709), crf 16, 24 fps, +faststart. Audio: OfflineAudioContext rendered in the
+// Video: libx264, yuv420p (BT.709), crf 16, C.FPS fps (60 here), +faststart. Audio: OfflineAudioContext rendered in the
 // page at 48 kHz stereo, written as WAV, muxed as AAC 192k.
 'use strict';
 
@@ -47,7 +47,7 @@ function encodeArgs({ input, wav, out, frames, crf, preset }) {
     '-i', wav,
     '-map', '0:v:0', '-map', '1:a:0',
     '-vf', 'scale=in_range=full:out_range=tv:out_color_matrix=bt709:flags=lanczos+accurate_rnd+full_chroma_int,format=yuv420p,setparams=range=tv:color_primaries=bt709:color_trc=bt709:colorspace=bt709',
-    '-c:v', 'libx264', '-preset', preset, '-crf', String(crf), '-pix_fmt', 'yuv420p', '-r', '24',
+    '-c:v', 'libx264', '-preset', preset, '-crf', String(crf), '-pix_fmt', 'yuv420p', '-r', String(C.FPS),
     '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv',
     '-c:a', 'aac', '-b:a', '192k', '-ar', String(SR), '-ac', '2',
     '-t', (frames / C.FPS).toFixed(6),
