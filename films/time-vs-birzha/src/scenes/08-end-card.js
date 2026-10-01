@@ -104,12 +104,31 @@
     }
   }
 
+  // kinetic letters (like FX.popLetters but with crisp, less fattened glyphs for the heavy site headline)
+  function letters(ctx, str, x, y, tt, t0, size) {
+    const chars = Array.from(str);
+    ctx.save();
+    ctx.font = F.font(size, 'sans', 700);
+    const ws = chars.map((c) => ctx.measureText(c).width);
+    ctx.restore();
+    const total = ws.reduce((a, b) => a + b, 0);
+    let cx = x - total / 2;
+    chars.forEach((c, i) => {
+      const k = F.popIn(tt, t0 + i * 0.014, 0.38);
+      if (k > 0.001 && c !== ' ') {
+        F.text(ctx, c, cx + ws[i] / 2, y + (1 - Math.min(1, k)) * size * 0.3, {
+          size, fill: C.lsInk, font: 'sans', weight: 700, fat: 0.012, scale: k, rot: (1 - Math.min(1, k)) * (i % 2 ? 0.3 : -0.3),
+        });
+      }
+      cx += ws[i];
+    });
+  }
+
   function tagline(ctx, tt) {
     const t0 = B1 + BT / 2; // the 8th after beat 1
-    const o = { size: 72, fill: C.lsInk, font: 'sans', stagger: 0.014, dur: 0.38 };
     if (tt < t0 - 1e-6) return;
-    F.popLetters(ctx, 'Stop babysitting', 540, TAG_Y[0], tt, t0, o);
-    F.popLetters(ctx, 'the charts.', 540, TAG_Y[1], tt, t0 + 0.12, o);
+    letters(ctx, 'Stop babysitting', 540, TAG_Y[0], tt, t0, 74);
+    letters(ctx, 'the charts.', 540, TAG_Y[1], tt, t0 + 0.12, 74);
   }
 
   function button(ctx, tt) {
@@ -129,7 +148,7 @@
     ctx.restore();
   }
 
-  function url(ctx, tt) {
+  function siteUrl(ctx, tt) {
     const k = F.popIn(tt, B2 + 0.08, 0.45);
     if (k <= 0) return;
     // a little anticipation dip into beat 3, landing (and freezing) on it
@@ -146,24 +165,25 @@
 
   function peekers(ctx, tt, T) {
     // Time (left) and биржа (right) peek from the bottom corners, fist-pump landing on beat 3
-    const up = E.outBack(seg(tt, B2 + 0.1, B2 + 0.42));
-    if (up <= 0) return;
+    const raw = seg(tt, B2 + 0.1, B2 + 0.42);
+    if (raw <= 0) return;
+    const up = E.outBack(raw);
     const pump = seg(tt, B3 - 0.16, B3, 'outBack');
     const sx = 1, sy = 1;
-    const tx = 175, ty = lerp(1830, 1660, up);
+    const tx = 175, ty = lerp(2010, 1660, up);
     FILM.cast.time(ctx, {
       x: tx, y: ty, s: 0.6, rot: 0.12, sx, sy, t: T, face: 'happy',
-      gloves: { r: [tx + 95 + pump * 10, ty - 40 - pump * 80] },
+      gloves: { r: [tx + 88 + pump * 6, ty - 20 - pump * 62] },
     });
-    const bx = 905, by = lerp(1830, 1660, up);
+    const bx = 905, by = lerp(2010, 1660, up);
     FILM.cast.birzha(ctx, {
       x: bx, y: by, s: 0.6, rot: -0.12, sx, sy, t: T, face: 'happy', candles: [0.6, 0.75, 0.9],
-      gloves: { l: [bx - 95 - pump * 10, by - 40 - pump * 80] },
+      gloves: { l: [bx - 88 - pump * 6, by - 20 - pump * 62] },
     });
     if (tt >= B3) {
       const age = tt - B3;
-      F.sparkle(ctx, tx + 120, ty - 150, 22 * Math.min(1, age * 30), { color: C.lsGreen });
-      F.sparkle(ctx, bx - 120, by - 150, 22 * Math.min(1, age * 30), { color: C.yellow });
+      F.sparkle(ctx, tx + 118, ty - 120, 22 * Math.min(1, age * 30), { color: C.lsGreen });
+      F.sparkle(ctx, bx - 118, by - 120, 22 * Math.min(1, age * 30), { color: C.yellow });
     }
   }
 
@@ -174,12 +194,13 @@
       const tt = Math.min(t, HOLD); // freeze: the final 0.4 s is a still poster
       const T = info.shot.start + tt;
       background(ctx, tt, T);
+      F.shockRing(ctx, 540, 600, tt - 0.06, { r: 420, color: C.lsGreen2, life: 0.5, width: 10 });
       const m = mark(ctx, tt);
       crown(ctx, tt, m);
       wordmark(ctx, tt);
       tagline(ctx, tt);
       button(ctx, tt);
-      url(ctx, tt);
+      siteUrl(ctx, tt);
       peekers(ctx, tt, T);
     },
   });

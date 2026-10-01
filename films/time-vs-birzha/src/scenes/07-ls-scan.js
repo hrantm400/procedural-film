@@ -64,6 +64,16 @@
     return { w, h };
   }
 
+  // cheap flat soft shadow for the big cards (canvas shadowBlur on 960 px cards is the frame's main cost)
+  function softShadow(ctx, x, y, w, h, r, a) {
+    ctx.save();
+    ctx.fillStyle = `rgba(19,40,58,${a * 0.6})`;
+    F.rrect(ctx, x - 4, y + 10, w + 8, h + 12, r + 4); ctx.fill();
+    ctx.fillStyle = `rgba(19,40,58,${a})`;
+    F.rrect(ctx, x + 6, y + 12, w - 12, h + 4, r); ctx.fill();
+    ctx.restore();
+  }
+
   // ---------------------------------------------------------------------------
   function background(ctx, t, T) {
     F.bgFill(ctx, C.lsBg);
@@ -134,7 +144,8 @@
     ctx.translate(540, y + h / 2);
     ctx.scale(lerp(0.9, 1, k), lerp(0.9, 1, k));
     ctx.translate(-540, -(y + h / 2));
-        F.dropShadow(ctx, (c) => { F.rrect(c, x, y, w, h, 60); c.fillStyle = F.linGrad(c, x, y, x + w, y + h, [C.lsTealA, C.lsTealB]); c.fill(); }, { dy: 18, blur: 34, color: 'rgba(19,40,58,0.3)' });
+        softShadow(ctx, x, y, w, h, 60, 0.12);
+    F.rrect(ctx, x, y, w, h, 60); ctx.fillStyle = F.linGrad(ctx, x, y, x + w, y + h, [C.lsTealA, C.lsTealB]); ctx.fill();
     // faint concentric arcs like the app card
     ctx.save();
     F.rrect(ctx, x, y, w, h, 60); ctx.clip();
@@ -163,7 +174,8 @@
     if (a <= 0) return;
     ctx.save();
     ctx.globalAlpha *= a;
-    F.card(ctx, x, y, w, h, { r: 48, shadowDy: 14, blur: 30, shadowColor: 'rgba(19,40,58,0.14)' });
+    softShadow(ctx, x, y, w, h, 48, 0.08);
+    F.card(ctx, x, y, w, h, { r: 48, shadow: false });
     // header row
     mono(ctx, 'BTCUSDT', x + 44, y + 58, 40, C.lsInk, { align: 'left', letter: 1 });
     pill(ctx, '1H', x + 300, y + 58, { size: 24, bg: C.lsBg, color: C.lsSlate });
@@ -243,7 +255,7 @@
   function fighters(ctx, t, T) {
     // they hop up from below and land on beat 2
     const land = B2;
-    const rise = seg(t, 0.5, land, 'outCubic');
+    const rise = seg(t, 0.32, land, 'outCubic');
     if (rise <= 0) return;
     const yOff = (1 - rise) * 560;
     const [sx, sy] = t < land ? [0.92, 1.1] : F.squash(t, land, 0.22, 0.45);
@@ -381,7 +393,8 @@
     if (k <= 0) return;
     const y = 1600 + (1 - k) * 360;
     ctx.save();
-    F.card(ctx, 100, y, 880, 150, { r: 75, shadowDy: 10, blur: 24, shadowColor: 'rgba(19,40,58,0.14)' });
+    softShadow(ctx, 100, y, 880, 150, 75, 0.08);
+    F.card(ctx, 100, y, 880, 150, { r: 75, shadow: false });
     const xs = [210, 430, 650, 870];
     const act = F.popIn(t, 1.0, 0.4);
     if (act > 0) {
@@ -429,7 +442,7 @@
       const m = markState(t);
       // landing puffs
       F.puffs(ctx, MARK0[0], MARK0[1] + MR, t - 0.15, { n: 7, seed: 71, size: 30, color: 'rgba(255,255,255,0.5)' });
-      if (t >= B3) F.confettiBurst(ctx, PILL1.x + 40, PILL1.y - 160, t - B3, { n: 46, seed: 77, power: 1300, colors: [C.lsGreen, C.lsGreen2, C.yellow, C.lsTealB, '#ffffff', C.timeCyan] });
+      if (t >= B3) F.confettiBurst(ctx, PILL1.x + 40, PILL1.y - 160, t - B3, { n: 36, seed: 77, power: 1300, colors: [C.lsGreen, C.lsGreen2, C.yellow, C.lsTealB, '#ffffff', C.timeCyan] });
       // light circle wipe into the end card, centred on the mark
       const wp = seg(t, 1.5, 5 / 3 - 1 / 60, 'inCubic');
       if (wp > 0) F.circleWipe(ctx, m.x, m.y, wp, C.lsBg, { rings: [C.lsGreen2] });

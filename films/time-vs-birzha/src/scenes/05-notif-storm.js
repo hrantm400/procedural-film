@@ -54,6 +54,18 @@
   const bzIcon = (t) => (ctx, size) => { CAST.birzha(ctx, { x: 0, y: 0, s: size / 240, t, face: 'laugh', greedy: true }); };
   const timeIcon = (t) => (ctx, size) => { CAST.time(ctx, { x: 0, y: 0, s: size / 240, t, face: 'calm', ring: 1 }); };
 
+  /** the same card drawn flat (no canvas blur) for the spinning pieces after the uppercut */
+  function flatNotification(ctx, x, y, o) {
+    ctx.fillStyle = 'rgba(27,21,48,0.18)';
+    F.rrect(ctx, x + 6, y + 14, N_W, N_H, N_H * 0.28); ctx.fill();
+    F.card(ctx, x, y, N_W, N_H, { r: N_H * 0.28, fill: '#ffffff', shadow: false });
+    const isz = N_H * 0.5;
+    ctx.save(); ctx.translate(x + N_H * 0.18 + isz / 2, y + N_H / 2); o.icon(ctx, isz); ctx.restore();
+    const tx = x + N_H * 0.18 + isz + N_H * 0.16;
+    F.text(ctx, o.app.toUpperCase(), tx, y + N_H * 0.25, { size: N_H * 0.14, fill: 'rgba(27,21,48,0.62)', align: 'left', rounded: false, font: 'sans' });
+    F.text(ctx, o.title, tx, y + N_H * 0.62, { size: 38, fill: o.color || C.ink, align: 'left', rounded: false });
+  }
+
   /** a notification card via FILM.fx.notif with a bigger, bolder title on top */
   function notification(ctx, x, y, o) {
     F.notif(ctx, x, y, N_W, { h: N_H, icon: o.icon, app: o.app, time: o.time, alpha: o.alpha });
@@ -112,8 +124,15 @@
     // 3 phone + lock screen
     const vib = t < HIT ? F.beatPulse(t, EIGHTH, 0.05) * 0.008 * Math.sin(t * 120) : 0;
     const phoneRot = vib + (t >= HIT ? F.squash(t, HIT, 0.05, 0.5)[0] - 1 : 0) * 0.3;
+    // cheap soft shadow instead of a 60 px canvas blur on the whole phone
+    ctx.save();
+    ctx.translate(PH.cx, PH.cy); ctx.rotate(phoneRot); ctx.translate(-PH.cx, -PH.cy);
+    ctx.fillStyle = 'rgba(120,30,80,0.10)';
+    F.rrect(ctx, PH.cx - PH.w / 2 - 14, PH.cy - PH.h / 2 + 10, PH.w + 28, PH.h + 40, PH.w * 0.17); ctx.fill();
+    F.rrect(ctx, PH.cx - PH.w / 2 - 4, PH.cy - PH.h / 2 + 18, PH.w + 8, PH.h + 18, PH.w * 0.16); ctx.fill();
+    ctx.restore();
     F.phone(ctx, PH.cx, PH.cy, PH.w, PH.h, {
-      rot: phoneRot,
+      rot: phoneRot, shadow: false,
       screenBg: '#2a1f5c',
       screen: (c, sw, sh) => lockScreen(c, sw, sh, t),
     });
@@ -139,7 +158,7 @@
         ctx.rotate(s.rot);
         const sc = 1 - age * 0.35;
         ctx.scale(sc, sc);
-        notification(ctx, -N_W / 2, -N_H / 2, { icon: bzIcon(t), app: 'биржа', time: 'now', title: BZ[k].title, color: C.bzDeep });
+        flatNotification(ctx, -N_W / 2, -N_H / 2, { icon: bzIcon(t), app: 'биржа', title: BZ[k].title, color: C.bzDeep });
         ctx.restore();
       }
       F.focusLines(ctx, 540, 1180, { inner: 260, count: 48, color: '#ffffff', alpha: 0.7 * (1 - seg(t, HIT, HIT + 0.3)), t });
